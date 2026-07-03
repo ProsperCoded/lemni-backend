@@ -8,21 +8,21 @@ This document outlines the sequential, step-by-step implementation tasks for the
 - [ ] **1.1. Environment Configuration & NestJS Configuration Setup**
   - Define all required environment variables in a `.env.example` file (including Turso/libSQL credentials, Nomba credentials, Upstash Redis URL, API Key hash salt, Telegram/WhatsApp configurations).
   - Setup NestJS `ConfigModule` and a strongly-typed configuration service.
-- [ ] **1.2. Database & TypeORM Setup with Turso/libSQL**
-  - Install dependencies for Turso (libSQL) driver and TypeORM (`@libsql/client`, `typeorm`, `@nestjs/typeorm`).
-  - Configure TypeORM module to connect to the Turso database.
-  - Setup CLI configuration for migrations (using `pnpm typeorm migration:generate` and `pnpm typeorm migration:run`).
-- [ ] **1.3. Database Entities Implementation**
-  - Implement TypeORM database entities reflecting the relational schema:
-    - `Merchant` (id, name, email, webhook_url, telegram_chat_id)
-    - `ApiKey` (id, merchant_id, hashed_key, environment [test/live], is_active)
-    - `Customer` (id, merchant_id, email, nomba_token, metadata [JSON])
-    - `Plan` (id, merchant_id, name, amount, interval [weekly, monthly, yearly], trial_days)
-    - `Subscription` (id, customer_id, plan_id, status [active, past_due, canceled], current_period_end)
-    - `Transaction` (id, subscription_id, amount, status [pending, success, failed], nomba_ref)
+- [ ] **1.2. Database & Drizzle Setup with Turso/libSQL**
+  - Use Drizzle ORM dependencies (`drizzle-orm`, `@libsql/client`) and dev dependencies (`drizzle-kit`).
+  - Configure Drizzle provider module in NestJS to establish connection to the Turso database using the `@libsql/client`.
+  - Configure `drizzle.config.ts` specifying the Turso database URL, authToken, and schema paths.
+- [ ] **1.3. Database Schema Implementation**
+  - Implement Drizzle schema definitions (`drizzle-orm/sqlite-core` or specific libSQL features) reflecting the relational design:
+    - `merchants` (id, name, email, webhook_url, telegram_chat_id)
+    - `api_keys` (id, merchant_id, hashed_key, environment [test/live], is_active)
+    - `customers` (id, merchant_id, email, nomba_token, metadata [JSON])
+    - `plans` (id, merchant_id, name, amount, billing_model [recurring/one_time/custom_input], interval [weekly/monthly/yearly/null], trial_days, trial_require_card [boolean], grace_period_days [integer])
+    - `subscriptions` (id, customer_id, plan_id, status [trialing, active, past_due, canceled], current_period_end, trial_end)
+    - `transactions` (id, subscription_id, amount, status [pending, success, failed], nomba_ref)
 - [ ] **1.4. Initial Database Migration**
-  - Generate the initial schema migration using TypeORM CLI.
-  - Run the migration using the CLI to initialize the database tables in Turso.
+  - Generate the initial schema migration using Drizzle Kit (`pnpm drizzle-kit generate` or `pnpm drizzle-kit push` for testing, but prefer generating migrations to follow agent rules).
+  - Apply the migration using Drizzle Kit CLI or database driver migration runner (`pnpm drizzle-kit migrate`).
 
 ---
 
@@ -60,8 +60,9 @@ This document outlines the sequential, step-by-step implementation tasks for the
 - [ ] **4.2. Proration Engine**
   - Implement calculations for mid-cycle plan upgrades and downgrades.
   - Compute exact pro-rata differences and output adjusting invoice items or charge amounts.
-- [ ] **4.3. Grace Period Logic**
-  - Write evaluator comparing `subscription.next_billing_date` plus configured grace period (+X days) to mark subscriptions as `past_due` or `canceled`.
+- [ ] **4.3. Grace Period & Trial Logic**
+  - Write evaluator comparing `subscription.next_billing_date` plus the plan's custom configured `grace_period_days` to transition a subscription to `past_due` and eventually `canceled`.
+  - Handle trial period expiration transitions: if `trial_days` complete, check if `trial_require_card` was true (card already tokenized) to immediately charge, or if card is missing, notify the customer/merchant to add a card.
 
 ---
 
@@ -84,12 +85,14 @@ This document outlines the sequential, step-by-step implementation tasks for the
   - Establish connection configurations to Upstash Redis.
   - Initialize the Redis client and BullMQ dashboard/module in NestJS.
 - [ ] **6.2. BillingWorker (Hourly Cron)**
-  - Implement worker querying Turso hourly for subscriptions where `next_billing_date <= NOW()`.
+  - Implement worker querying Turso hourly for subscriptions where:
+    - Status is `active` and `next_billing_date <= NOW()` (process charge)
+    - Status is `trialing` and `trial_end <= NOW()` (promote to active, or transition to canceled/past_due based on card presence and `trial_require_card`)
   - Push matching jobs into the `ChargeQueue`.
 - [ ] **6.3. DunningWorker (Failure Retries & Queue)**
   - Implement queue worker executing failed charge attempts.
   - Implement exponential backoff or WAT 9:00 AM heuristic retry scheduling.
-  - Drop jobs into Dead Letter Queue (DLQ) if max retries are exceeded.
+  - Cancel subscription if retries fail after `grace_period_days` limit is reached, then drop jobs into Dead Letter Queue (DLQ).
 - [ ] **6.4. HealthCron & Queue Management**
   - Regularly ping Nomba health endpoint.
   - Pause the `ChargeQueue` if Nomba returns error states (circuit breaker tripped) and resume when online.

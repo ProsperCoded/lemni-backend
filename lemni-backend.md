@@ -5,7 +5,7 @@ This document details the deterministic, highly resilient backend infrastructure
 ## **1\. Global Infrastructure & Stack**
 
 * **Framework:** NestJS (Node.js/TypeScript). Enforces strict dependency injection and modular boundaries, essential for isolating third-party provider failures.  
-* **Database:** Turso (libSQL). Operating at the edge, providing ultra-low latency relational data storage. Connected via TypeORM (using the libSQL driver) to enforce strict schema validation and transaction rollbacks.  
+* **Database:** Turso (libSQL). Operating at the edge, providing ultra-low latency relational data storage. Connected via Drizzle ORM (using `@libsql/client`) to enforce strict schema validation and database actions.  
 * **Queue Engine:** BullMQ backed by Redis (Upstash/Render free tier). Handles distributed task scheduling, delayed retries, and rate-limiting.  
 * **Hosting Deployment:** Render Web Services.  
 * **Contingency (Keep-Alive):** To bypass Render's 15-minute idle sleep on free tiers, an external cron service (e.g., UptimeRobot or GitHub Actions) will ping a lightweight GET /health endpoint every 10 minutes. This guarantees BullMQ workers and internal cron schedules never freeze.
@@ -62,8 +62,8 @@ The asynchronous heart of the engine.
 | **Merchants** | id, name, email, webhook\_url, telegram\_chat\_id | 1:N with API\_Keys, Plans, Customers |
 | **API\_Keys** | id, merchant\_id, hashed\_key, environment (test/live), is\_active | Belongs to Merchant |
 | **Customers** | id, merchant\_id, email, nomba\_token, metadata (JSON) | 1:N with Subscriptions |
-| **Plans** | id, merchant\_id, name, amount, interval (weekly, monthly, yearly), trial\_days | 1:N with Subscriptions |
-| **Subscriptions** | id, customer\_id, plan\_id, status (active, past\_due, canceled), current\_period\_end | Belongs to Customer, Plan |
+| **Plans** | id, merchant\_id, name, amount, billing\_model (recurring/one\_time/custom\_input), interval (weekly/monthly/yearly/null), trial\_days, trial\_require\_card (boolean), grace\_period\_days (integer) | 1:N with Subscriptions |
+| **Subscriptions** | id, customer\_id, plan\_id, status (trialing, active, past\_due, canceled), current\_period\_end, trial\_end | Belongs to Customer, Plan |
 | **Transactions** | id, subscription\_id, amount, status (pending, success, failed), nomba\_ref | Log of all charge attempts |
 
 ## **4\. The Dunning Execution Flow (Unhappy Path)**
