@@ -3,10 +3,8 @@ import {
   Logger,
   HttpException,
   HttpStatus,
-  Inject,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { IdempotencyService } from './idempotency.service';
 import { CircuitBreakerService } from './circuit-breaker.service';
 
 @Injectable()
@@ -16,7 +14,6 @@ export class NombaClient {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly idempotencyService: IdempotencyService,
     private readonly circuitBreakerService: CircuitBreakerService,
   ) {
     this.baseUrl =
@@ -57,7 +54,6 @@ export class NombaClient {
   ): Promise<any> {
     return this.executeRequest(
       idempotencyKey,
-      'create_checkout_order',
       '/v1/checkout/order',
       orderPayload,
     );
@@ -72,18 +68,16 @@ export class NombaClient {
   ): Promise<any> {
     return this.executeRequest(
       idempotencyKey,
-      'charge_tokenized_card',
       '/v1/checkout/tokenized-card-payment',
       paymentPayload,
     );
   }
 
   /**
-   * Orchestrates the request, checking circuit breaker and verifying idempotency.
+   * Orchestrates the request, checking circuit breaker and verifying idempotency via headers.
    */
   private async executeRequest(
     idempotencyKey: string,
-    requestType: string,
     endpoint: string,
     payload: any,
   ): Promise<any> {
@@ -95,33 +89,6 @@ export class NombaClient {
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
-
-    // 2. Idempotency check: has this request already been executed successfully?
-    const existing = await this.idempotencyService.getKeyRecord(idempotencyKey);
-    if (existing) {
-      if (existing.status === 'completed') {
-        this.logger.log(
-          `Idempotency hit! Returning cached response for key: ${idempotencyKey}`,
-        );
-        return existing.response;
-      }
-      if (existing.status === 'pending') {
-        this.logger.warn(
-          `Transaction retry detected while original is still pending: ${idempotencyKey}`,
-        );
-        throw new HttpException(
-          'A transaction with this idempotency key is already in progress',
-          HttpStatus.CONFLICT,
-        );
-      }
-    }
-
-    // 3. Register the key in the database as pending prior to execution
-    await this.idempotencyService.registerKey(
-      idempotencyKey,
-      requestType,
-      payload,
-    );
 
     const { clientId, clientSecret, accountId } = this.getCredentials();
     const url = `${this.baseUrl}${endpoint}`;
@@ -165,11 +132,6 @@ export class NombaClient {
       if (response.status >= 500) {
         // Record gateway failures
         this.circuitBreakerService.recordFailure();
-        await this.idempotencyService.resolveKey(
-          idempotencyKey,
-          'failed',
-          responseData,
-        );
         throw new HttpException(
           `Payment gateway returned server error: ${response.status}`,
           HttpStatus.BAD_GATEWAY,
@@ -177,12 +139,6 @@ export class NombaClient {
       }
 
       if (!response.ok) {
-        // Client errors (4xx) do not trip the circuit breaker but resolve as failed transaction attempts
-        await this.idempotencyService.resolveKey(
-          idempotencyKey,
-          'failed',
-          responseData,
-        );
         throw new HttpException(
           responseData.message ||
             `Payment gateway request failed: ${response.status}`,
@@ -192,11 +148,6 @@ export class NombaClient {
 
       // Success
       this.circuitBreakerService.recordSuccess();
-      await this.idempotencyService.resolveKey(
-        idempotencyKey,
-        'completed',
-        responseData,
-      );
       return responseData;
     } catch (error) {
       if (error instanceof HttpException) {
@@ -204,14 +155,6 @@ export class NombaClient {
       }
       // Network timeouts, DNS issues, or total connection drops count as circuit breaker failures
       this.circuitBreakerService.recordFailure();
-      const networkError = {
-        message: error.message || 'Network connection failed',
-      };
-      await this.idempotencyService.resolveKey(
-        idempotencyKey,
-        'failed',
-        networkError,
-      );
       throw new HttpException(
         'Outbound connection to payment gateway failed',
         HttpStatus.GATEWAY_TIMEOUT,
