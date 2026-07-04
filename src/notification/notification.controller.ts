@@ -40,9 +40,7 @@ import type {
 export class NotificationController {
   private readonly logger = new Logger(NotificationController.name);
 
-  constructor(
-    @Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB,
-  ) {}
+  constructor(@Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB) {}
 
   @Delete('disconnect')
   @UseGuards(JwtAuthGuard)

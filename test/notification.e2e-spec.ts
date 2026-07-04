@@ -6,7 +6,14 @@ import { App } from 'supertest/types';
 import * as crypto from 'crypto';
 import { AppModule } from './../src/app.module';
 import { DRIZZLE_PROVIDER } from './../src/database/database.provider';
-import { merchants, apiKeys, transactions, subscriptions, customers, plans } from './../src/database/schema';
+import {
+  merchants,
+  apiKeys,
+  transactions,
+  subscriptions,
+  customers,
+  plans,
+} from './../src/database/schema';
 import { eq } from 'drizzle-orm';
 
 describe('Notification Module (e2e)', () => {
@@ -21,6 +28,7 @@ describe('Notification Module (e2e)', () => {
     id: 'merchant-notification-test',
     name: 'Notification Test Merchant',
     email: 'notification-test@merchant.com',
+    username: 'notification_test_merchant',
     defaultRedirectUrl: 'https://lemni.com',
     telegramChatId: null,
   };

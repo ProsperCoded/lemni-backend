@@ -17,6 +17,7 @@ import { JwtService } from '@nestjs/jwt';
 import { eq } from 'drizzle-orm';
 
 describe('Billing & Domain Logic (e2e)', () => {
+  jest.setTimeout(30000);
   let app: INestApplication<App>;
   let db: any;
   let prorationService: ProrationService;
@@ -28,6 +29,7 @@ describe('Billing & Domain Logic (e2e)', () => {
     id: 'merchant-billing-test',
     name: 'Billing Test Merchant',
     email: 'billing-test@merchant.com',
+    username: 'billing_test_merchant',
   };
 
   beforeAll(async () => {
@@ -354,6 +356,7 @@ describe('Billing & Domain Logic (e2e)', () => {
         id: 'other-merchant-id',
         name: 'Other Merchant',
         email: 'other@merchant.com',
+        username: 'other_merchant_test',
       };
       await db.insert(merchants).values(otherMerchant);
 

@@ -22,7 +22,14 @@ import {
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
 
-import type { SignupDto, LoginDto, ResetPasswordDto } from './dto/auth.dto';
+import type {
+  SignupDto,
+  LoginDto,
+  ResetPasswordDto,
+  ForgotPasswordDto,
+  VerifyResetOtpDto,
+  ResetPasswordWithTokenDto,
+} from './dto/auth.dto';
 
 @ApiTags('merchant-dashboard/auth')
 @Controller('auth')
@@ -289,16 +296,66 @@ export class AuthController {
           type: 'string',
           format: 'uri',
           example: 'https://t.me/lemni_bot?start=acme-corp',
-          description: 'Click this link to open Telegram with merchant username auto-filled',
+          description:
+            'Click this link to open Telegram with merchant username auto-filled',
         },
       },
     },
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
-  @ApiResponse({ status: 400, description: 'Telegram bot not configured or merchant not found' })
+  @ApiResponse({
+    status: 400,
+    description: 'Telegram bot not configured or merchant not found',
+  })
   async getTelegramLink(@Request() req: ExpressRequest) {
     const merchantId = (req.user as Record<string, unknown>).sub as string;
     return await this.authService.generateTelegramDeepLink(merchantId);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Request password reset verification code',
+    description:
+      'Generates and sends a 6-digit OTP code to the merchant email.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Reset code sent or email not found',
+  })
+  async forgotPassword(@Body() body: ForgotPasswordDto) {
+    return await this.authService.forgotPassword(body.email);
+  }
+
+  @Post('verify-reset-otp')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Verify password reset OTP',
+    description:
+      'Validates the reset OTP code and returns a short-lived reset token.',
+  })
+  @ApiResponse({ status: 200, description: 'OTP verified successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired OTP' })
+  async verifyResetOtp(@Body() body: VerifyResetOtpDto) {
+    return await this.authService.verifyResetOtp(body.email, body.code);
+  }
+
+  @Post('reset-password-with-token')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Reset password using token',
+    description: 'Resets the password utilizing the short-lived reset token.',
+  })
+  @ApiResponse({ status: 200, description: 'Password reset successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid/expired token or password criteria not met',
+  })
+  async resetPasswordWithToken(@Body() body: ResetPasswordWithTokenDto) {
+    return await this.authService.resetPasswordWithToken(
+      body.token,
+      body.newPassword,
+    );
   }
 }
 

@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { AuthController, ApiKeysController } from './auth.controller';
+import { EmailService } from '../common/services/email.service';
 
 @Module({
   imports: [
@@ -22,8 +23,8 @@ import { AuthController, ApiKeysController } from './auth.controller';
     }),
   ],
   controllers: [AuthController, ApiKeysController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService, PassportModule, JwtModule],
+  providers: [AuthService, JwtStrategy, EmailService],
+  exports: [AuthService, PassportModule, JwtModule, EmailService],
 })
 export class AuthModule {}
 export { AuthService };

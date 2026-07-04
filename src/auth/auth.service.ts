@@ -12,8 +12,9 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
-import { apiKeys, merchants } from '../database/schema';
-import { eq, and } from 'drizzle-orm';
+import { apiKeys, merchants, otpVerifications } from '../database/schema';
+import { eq, and, gte } from 'drizzle-orm';
+import { EmailService } from '../common/services/email.service';
 
 @Injectable()
 export class AuthService {
@@ -23,6 +24,7 @@ export class AuthService {
     @Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB,
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
+    private readonly emailService: EmailService,
   ) {}
 
   /**
@@ -112,7 +114,7 @@ export class AuthService {
    */
   private async generateUniqueUsername(name: string): Promise<string> {
     // Base username: lowercase, replace spaces with hyphens, remove special chars
-    let baseUsername = name
+    const baseUsername = name
       .toLowerCase()
       .replace(/\s+/g, '-')
       .replace(/[^a-z0-9-]/g, '')
@@ -336,7 +338,9 @@ export class AuthService {
    * Uses merchant username (not UUID) for privacy and better UX
    * The bot will receive the username and look up the merchant
    */
-  async generateTelegramDeepLink(merchantId: string): Promise<{ telegramUrl: string }> {
+  async generateTelegramDeepLink(
+    merchantId: string,
+  ): Promise<{ telegramUrl: string }> {
     const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME');
     if (!botUsername) {
       throw new BadRequestException('Telegram bot username not configured');
@@ -359,5 +363,176 @@ export class AuthService {
     const telegramUrl = `https://t.me/${botUsername}?start=${encodeURIComponent(merchantUsername)}`;
 
     return { telegramUrl };
+  }
+
+  /**
+   * Request password reset by email. Generates and sends a 6-digit OTP code.
+   */
+  async forgotPassword(email: string) {
+    const [merchant] = await this.db
+      .select()
+      .from(merchants)
+      .where(eq(merchants.email, email));
+
+    // Return generic success to prevent email enumeration
+    const genericResponse = {
+      success: true,
+      message: 'If the email exists, a password reset code has been sent.',
+    };
+
+    if (!merchant) {
+      return genericResponse;
+    }
+
+    // Generate 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    // Clean up previous OTPs for this merchant
+    await this.db
+      .delete(otpVerifications)
+      .where(eq(otpVerifications.merchantId, merchant.id));
+
+    // Save OTP
+    const id = `otp_${crypto.randomBytes(8).toString('hex')}`;
+    await this.db.insert(otpVerifications).values({
+      id,
+      merchantId: merchant.id,
+      code,
+      expiresAt,
+    });
+
+    // Send email
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Reset Your Password</title>
+        <style>
+          body { font-family: Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+          .header { background-color: #1a1a1a; padding: 30px; text-align: center; color: white; }
+          .content { padding: 40px 30px; color: #333333; line-height: 1.6; }
+          .otp-card { background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 20px; text-align: center; margin: 30px 0; }
+          .otp-code { font-size: 36px; font-weight: bold; color: #111111; letter-spacing: 4px; margin: 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h2>Lemni Security</h2>
+          </div>
+          <div class="content">
+            <p>Hello,</p>
+            <p>We received a request to reset your password. Use the following one-time verification code (OTP) to proceed:</p>
+            <div class="otp-card">
+              <h2 class="otp-code">${code}</h2>
+            </div>
+            <p>This code is valid for 10 minutes. If you did not request this, please ignore this email.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await this.emailService.sendEmail(
+      email,
+      'Lemni - Reset Your Password',
+      emailHtml,
+    );
+
+    return genericResponse;
+  }
+
+  /**
+   * Verify Reset OTP and return short-lived Reset Token.
+   */
+  async verifyResetOtp(email: string, code: string) {
+    const [merchant] = await this.db
+      .select()
+      .from(merchants)
+      .where(eq(merchants.email, email));
+
+    if (!merchant) {
+      throw new BadRequestException('Invalid email or verification code');
+    }
+
+    const now = new Date().toISOString();
+    const [otpRecord] = await this.db
+      .select()
+      .from(otpVerifications)
+      .where(
+        and(
+          eq(otpVerifications.merchantId, merchant.id),
+          eq(otpVerifications.code, code),
+          gte(otpVerifications.expiresAt, now),
+        ),
+      );
+
+    if (!otpRecord) {
+      throw new BadRequestException('Invalid or expired verification code');
+    }
+
+    // Clean up OTP
+    await this.db
+      .delete(otpVerifications)
+      .where(eq(otpVerifications.id, otpRecord.id));
+
+    // Generate short-lived reset token
+    const token = this.jwtService.sign(
+      { email, purpose: 'reset-password' },
+      { expiresIn: '5m' },
+    );
+
+    return {
+      success: true,
+      token,
+    };
+  }
+
+  /**
+   * Reset password using Reset Token.
+   */
+  async resetPasswordWithToken(token: string, newPassword: string) {
+    try {
+      const payload = this.jwtService.verify(token);
+
+      if (payload.purpose !== 'reset-password') {
+        throw new BadRequestException('Invalid token purpose');
+      }
+
+      const email = payload.email;
+      const [merchant] = await this.db
+        .select()
+        .from(merchants)
+        .where(eq(merchants.email, email));
+
+      if (!merchant) {
+        throw new BadRequestException('Merchant not found');
+      }
+
+      if (newPassword.length < 8) {
+        throw new BadRequestException(
+          'Password must be at least 8 characters long',
+        );
+      }
+
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+      await this.db
+        .update(merchants)
+        .set({ hashedPassword })
+        .where(eq(merchants.id, merchant.id));
+
+      return {
+        success: true,
+        message: 'Password reset successfully.',
+      };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new BadRequestException(`Invalid or expired token: ${msg}`);
+    }
   }
 }

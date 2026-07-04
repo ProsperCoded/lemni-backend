@@ -18,6 +18,8 @@ export const EnvironmentSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_BOT_USERNAME: z.string().optional(),
   TELEGRAM_BOT_SECRET: z.string().optional(),
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_SENDER_EMAIL: z.string().optional(),
 });
 
 export type Environment = z.infer<typeof EnvironmentSchema>;

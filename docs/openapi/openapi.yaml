@@ -586,6 +586,46 @@ paths:
       summary: Create a one-time checkout session
       tags:
         - developer-apis/checkout
+  /api/v1/public/subscriptions/{id}/unsubscribe/confirm:
+    post:
+      description: Verifies the OTP code and cancels the subscription.
+      operationId: CheckoutController_confirmUnsubscribe
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscription successfully canceled
+        '400':
+          description: Invalid or expired code, or subscription already canceled
+        '404':
+          description: Subscription not found
+      summary: Confirm unsubscribe with OTP
+      tags:
+        - developer-apis/checkout
+  /api/v1/public/subscriptions/{id}/unsubscribe/request:
+    post:
+      description: Generates and sends a 6-digit OTP code to the subscription owner email.
+      operationId: CheckoutController_requestUnsubscribe
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Verification code sent
+        '403':
+          description: Email does not match subscription owner
+        '404':
+          description: Subscription not found
+      summary: Request email OTP to unsubscribe
+      tags:
+        - developer-apis/checkout
   /api/v1/sessions/{id}/status:
     get:
       description: Enables frontend checkouts or backend applications to poll for session completion status.
@@ -689,25 +729,28 @@ paths:
       summary: Create a subscription checkout session
       tags:
         - developer-apis/checkout
-  /api/v1/webhooks/telegram:
+  /api/v1/webhooks/test:
     post:
-      description: Receives updates or connection requests from the Telegram bot
-      operationId: WebhookController_handleTelegramWebhook
+      description: Returns 200 OK. Use this to test if webhooks are reaching your server.
+      operationId: WebhookController_testWebhook
       parameters: []
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                properties:
-                  message:
-                    type: string
-                  success:
-                    type: boolean
-          description: Telegram connected successfully
-      summary: Telegram bot webhook endpoint
+          description: Webhook received
+      summary: Test webhook endpoint (development only)
       tags:
         - Webhook
+  /auth/forgot-password:
+    post:
+      description: Generates and sends a 6-digit OTP code to the merchant email.
+      operationId: AuthController_forgotPassword
+      parameters: []
+      responses:
+        '200':
+          description: Reset code sent or email not found
+      summary: Request password reset verification code
+      tags:
+        - merchant-dashboard/auth
   /auth/login:
     post:
       description: >-
@@ -878,6 +921,19 @@ paths:
       tags:
         - merchant-dashboard/auth
         - merchant-dashboard/auth
+  /auth/reset-password-with-token:
+    post:
+      description: Resets the password utilizing the short-lived reset token.
+      operationId: AuthController_resetPasswordWithToken
+      parameters: []
+      responses:
+        '200':
+          description: Password reset successfully
+        '400':
+          description: Invalid/expired token or password criteria not met
+      summary: Reset password using token
+      tags:
+        - merchant-dashboard/auth
   /auth/signup:
     post:
       description: >-
@@ -944,8 +1000,8 @@ paths:
   /auth/telegram-link:
     get:
       description: >-
-        Returns a clickable Telegram link that opens the bot with merchant username pre-filled. Merchant just needs to click
-        and the Telegram app opens with /start merchant_username ready to send.
+        Returns a clickable Telegram link that opens the bot with merchant username pre-filled. Merchant just needs to
+        click and the Telegram app opens with /start merchant_username ready to send.
       operationId: AuthController_getTelegramLink
       parameters: []
       responses:
@@ -968,6 +1024,19 @@ paths:
       security:
         - bearer: []
       summary: Generate Telegram deep link for merchant support
+      tags:
+        - merchant-dashboard/auth
+  /auth/verify-reset-otp:
+    post:
+      description: Validates the reset OTP code and returns a short-lived reset token.
+      operationId: AuthController_verifyResetOtp
+      parameters: []
+      responses:
+        '200':
+          description: OTP verified successfully
+        '400':
+          description: Invalid or expired OTP
+      summary: Verify password reset OTP
       tags:
         - merchant-dashboard/auth
   /test-api-key:

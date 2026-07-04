@@ -26,3 +26,27 @@ export const ResetPasswordSchema = z.object({
 });
 
 export type ResetPasswordDto = z.infer<typeof ResetPasswordSchema>;
+
+export const ForgotPasswordSchema = z.object({
+  email: z.string().email({ message: 'Invalid email address' }),
+});
+
+export type ForgotPasswordDto = z.infer<typeof ForgotPasswordSchema>;
+
+export const VerifyResetOtpSchema = z.object({
+  email: z.string().email({ message: 'Invalid email address' }),
+  code: z.string().length(6, { message: 'Code must be exactly 6 characters' }),
+});
+
+export type VerifyResetOtpDto = z.infer<typeof VerifyResetOtpSchema>;
+
+export const ResetPasswordWithTokenSchema = z.object({
+  token: z.string().min(1, { message: 'Token is required' }),
+  newPassword: z
+    .string()
+    .min(8, { message: 'New password must be at least 8 characters long' }),
+});
+
+export type ResetPasswordWithTokenDto = z.infer<
+  typeof ResetPasswordWithTokenSchema
+>;

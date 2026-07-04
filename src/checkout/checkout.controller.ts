@@ -26,11 +26,15 @@ import {
   OneTimePaymentSchema,
   SubscriptionPaymentSchema,
   PublicPlanSessionSchema,
+  UnsubscribeRequestSchema,
+  UnsubscribeConfirmSchema,
 } from './dto/checkout.dto';
 import type {
   OneTimePaymentDto,
   SubscriptionPaymentDto,
   PublicPlanSessionDto,
+  UnsubscribeRequestDto,
+  UnsubscribeConfirmDto,
 } from './dto/checkout.dto';
 
 @ApiTags('developer-apis/checkout')
@@ -237,5 +241,47 @@ export class CheckoutController {
     @Body() body: PublicPlanSessionDto,
   ) {
     return this.checkoutService.createPublicPlanSession(planId, body);
+  }
+
+  @Post('public/subscriptions/:id/unsubscribe/request')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Request email OTP to unsubscribe',
+    description:
+      'Generates and sends a 6-digit OTP code to the subscription owner email.',
+  })
+  @ApiResponse({ status: 200, description: 'Verification code sent' })
+  @ApiResponse({ status: 404, description: 'Subscription not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Email does not match subscription owner',
+  })
+  async requestUnsubscribe(
+    @Param('id') id: string,
+    @Body() body: UnsubscribeRequestDto,
+  ) {
+    return this.checkoutService.requestUnsubscribe(id, body.email);
+  }
+
+  @Post('public/subscriptions/:id/unsubscribe/confirm')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Confirm unsubscribe with OTP',
+    description: 'Verifies the OTP code and cancels the subscription.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription successfully canceled',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid or expired code, or subscription already canceled',
+  })
+  @ApiResponse({ status: 404, description: 'Subscription not found' })
+  async confirmUnsubscribe(
+    @Param('id') id: string,
+    @Body() body: UnsubscribeConfirmDto,
+  ) {
+    return this.checkoutService.confirmUnsubscribe(id, body.code);
   }
 }

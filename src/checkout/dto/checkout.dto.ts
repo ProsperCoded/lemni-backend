@@ -22,3 +22,15 @@ export const PublicPlanSessionSchema = z.object({
 });
 
 export type PublicPlanSessionDto = z.infer<typeof PublicPlanSessionSchema>;
+
+export const UnsubscribeRequestSchema = z.object({
+  email: z.string().email('Invalid email address'),
+});
+
+export type UnsubscribeRequestDto = z.infer<typeof UnsubscribeRequestSchema>;
+
+export const UnsubscribeConfirmSchema = z.object({
+  code: z.string().length(6, 'Verification code must be exactly 6 characters'),
+});
+
+export type UnsubscribeConfirmDto = z.infer<typeof UnsubscribeConfirmSchema>;

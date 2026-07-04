@@ -4,8 +4,9 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { DRIZZLE_PROVIDER } from './../src/database/database.provider';
-import { merchants, apiKeys } from './../src/database/schema';
+import { merchants, apiKeys, otpVerifications } from './../src/database/schema';
 import { AuthService } from './../src/auth/auth.service';
+import { EmailService } from './../src/common/services/email.service';
 import { JwtService } from '@nestjs/jwt';
 import { eq } from 'drizzle-orm';
 import * as bcrypt from 'bcryptjs';
@@ -22,6 +23,7 @@ describe('Security & Authentication (e2e)', () => {
     id: 'merchant-test-123',
     name: 'Test Merchant',
     email: 'test@merchant.com',
+    username: 'auth_test_merchant',
   };
 
   const rawDefaultPassword = 'OldSecurePassword123';
@@ -38,7 +40,11 @@ describe('Security & Authentication (e2e)', () => {
     authService = moduleFixture.get(AuthService);
     jwtService = moduleFixture.get(JwtService);
 
+    const emailService = moduleFixture.get(EmailService);
+    jest.spyOn(emailService, 'sendEmail').mockResolvedValue(true);
+
     // Clean tables and seed test merchant
+    await db.delete(otpVerifications);
     await db.delete(apiKeys);
     await db.delete(merchants);
 
@@ -51,6 +57,7 @@ describe('Security & Authentication (e2e)', () => {
 
   afterAll(async () => {
     // Clean up database records and close app
+    await db.delete(otpVerifications);
     await db.delete(apiKeys);
     await db.delete(merchants);
     await app.close();
@@ -259,6 +266,90 @@ describe('Security & Authentication (e2e)', () => {
           newPassword: 'short',
         })
         .expect(400);
+    });
+  });
+
+  describe('Forgot Password Flow (OTP + Reset Token)', () => {
+    it('should respond with success message for forgot password request (200)', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/auth/forgot-password')
+        .send({ email: testMerchant.email })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toContain(
+        'password reset code has been sent',
+      );
+
+      // Verify OTP is generated in the database
+      const merchantRecord = await db
+        .select()
+        .from(merchants)
+        .where(eq(merchants.email, testMerchant.email));
+
+      const [otpRecord] = await db
+        .select()
+        .from(otpVerifications)
+        .where(eq(otpVerifications.merchantId, merchantRecord[0].id));
+
+      expect(otpRecord).toBeDefined();
+      expect(otpRecord.code).toHaveLength(6);
+    });
+
+    it('should reject OTP verification with incorrect code (400)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/verify-reset-otp')
+        .send({
+          email: testMerchant.email,
+          code: '000000',
+        })
+        .expect(400);
+    });
+
+    it('should successfully verify OTP and return a reset token (200)', async () => {
+      const merchantRecord = await db
+        .select()
+        .from(merchants)
+        .where(eq(merchants.email, testMerchant.email));
+
+      const [otpRecord] = await db
+        .select()
+        .from(otpVerifications)
+        .where(eq(otpVerifications.merchantId, merchantRecord[0].id));
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/verify-reset-otp')
+        .send({
+          email: testMerchant.email,
+          code: otpRecord.code,
+        })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.token).toBeDefined();
+
+      // Now reset password using the token
+      const newPassword = 'BrandNewPassword123!';
+      const resetResponse = await request(app.getHttpServer())
+        .post('/auth/reset-password-with-token')
+        .send({
+          token: response.body.token,
+          newPassword,
+        })
+        .expect(200);
+
+      expect(resetResponse.body.success).toBe(true);
+
+      // Verify merchant can login with new password
+      const loginResponse = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({
+          email: testMerchant.email,
+          password: newPassword,
+        })
+        .expect(200);
+
+      expect(loginResponse.body.accessToken).toBeDefined();
     });
   });
 });

@@ -123,6 +123,14 @@ This document outlines the sequential, step-by-step implementation tasks for the
   - **Unhappy paths:**
     - Querying merchant requests transactions for customers or subscriptions that belong to a different merchant → return an empty array (do not cross-leak transactions).
     - Limit or offset query parameters are malformed (e.g. non-numeric strings) → validation fails with `400 Bad Request`.
+- [x] **4.6. Customer Self-Unsubscribe**
+  - Implement public endpoints for customers to cancel their subscriptions securely:
+    - `POST /api/v1/public/subscriptions/:id/unsubscribe/request` sends a 6-digit OTP code to the verified customer's email.
+    - `POST /api/v1/public/subscriptions/:id/unsubscribe/confirm` validates the code and cancels the subscription.
+  - Integrates with **Resend** email provider using customized Lemni HTML branding template.
+  - **Unhappy paths:**
+    - Requesting OTP with an email that doesn't match the customer subscription owner → return `403 Forbidden`.
+    - Confirming with an invalid or expired code, or trying to cancel an already canceled subscription → return `400 Bad Request`.
 
 ---
 

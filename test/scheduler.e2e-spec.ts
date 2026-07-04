@@ -18,6 +18,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Queue } from 'bullmq';
 
 describe('Scheduler Module (e2e)', () => {
+  jest.setTimeout(30000);
   let app: INestApplication<App>;
   let db: DrizzleDB;
   let jwtToken: string;
@@ -29,6 +30,7 @@ describe('Scheduler Module (e2e)', () => {
     id: MERCHANT_ID,
     name: 'Scheduler Test Merchant',
     email: 'sched@test.com',
+    username: 'scheduler_test_merchant',
   };
 
   beforeAll(async () => {

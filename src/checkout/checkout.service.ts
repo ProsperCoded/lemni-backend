@@ -1,4 +1,10 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
 import { NombaClient } from '../provider/nomba.client';
@@ -8,15 +14,18 @@ import {
   subscriptions,
   transactions,
   merchants,
+  otpVerifications,
 } from '../database/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, gte } from 'drizzle-orm';
 import * as crypto from 'crypto';
+import { EmailService } from '../common/services/email.service';
 
 @Injectable()
 export class CheckoutService {
   constructor(
     @Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB,
     private readonly nombaClient: NombaClient,
+    private readonly emailService: EmailService,
   ) {}
 
   /**
@@ -268,5 +277,111 @@ export class CheckoutService {
       email: data.email,
       callbackUrl: data.callbackUrl,
     });
+  }
+
+  /**
+   * Request unsubscribe by generating and sending a 6-digit OTP code.
+   */
+  async requestUnsubscribe(subscriptionId: string, email: string) {
+    const [sub] = await this.db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.id, subscriptionId));
+
+    if (!sub) {
+      throw new NotFoundException('Subscription not found');
+    }
+
+    const [customer] = await this.db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, sub.customerId));
+
+    if (!customer || customer.email !== email) {
+      throw new ForbiddenException(
+        'Email does not match subscription customer',
+      );
+    }
+
+    // Generate 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    // Clean up past OTPs
+    await this.db
+      .delete(otpVerifications)
+      .where(eq(otpVerifications.subscriptionId, subscriptionId));
+
+    // Save OTP
+    const id = `otp_${crypto.randomBytes(8).toString('hex')}`;
+    await this.db.insert(otpVerifications).values({
+      id,
+      subscriptionId,
+      code,
+      expiresAt,
+    });
+
+    // Send email
+    const emailHtml = this.emailService.renderOtpEmail(code);
+    await this.emailService.sendEmail(
+      email,
+      'Lemni - Confirm your unsubscribe request',
+      emailHtml,
+    );
+
+    return {
+      success: true,
+      message: 'Verification code sent to your email.',
+    };
+  }
+
+  /**
+   * Confirm unsubscribe using OTP code.
+   */
+  async confirmUnsubscribe(subscriptionId: string, code: string) {
+    const [sub] = await this.db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.id, subscriptionId));
+
+    if (!sub) {
+      throw new NotFoundException('Subscription not found');
+    }
+
+    if (sub.status === 'canceled') {
+      throw new BadRequestException('Subscription is already canceled');
+    }
+
+    const now = new Date().toISOString();
+    const [otpRecord] = await this.db
+      .select()
+      .from(otpVerifications)
+      .where(
+        and(
+          eq(otpVerifications.subscriptionId, subscriptionId),
+          eq(otpVerifications.code, code),
+          gte(otpVerifications.expiresAt, now),
+        ),
+      );
+
+    if (!otpRecord) {
+      throw new BadRequestException('Invalid or expired verification code');
+    }
+
+    // Cancel subscription
+    await this.db
+      .update(subscriptions)
+      .set({ status: 'canceled' })
+      .where(eq(subscriptions.id, subscriptionId));
+
+    // Clean up OTP
+    await this.db
+      .delete(otpVerifications)
+      .where(eq(otpVerifications.id, otpRecord.id));
+
+    return {
+      success: true,
+      message: 'Subscription successfully canceled.',
+    };
   }
 }

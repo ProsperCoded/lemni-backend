@@ -27,7 +27,11 @@ import type { NotificationJobPayload } from './dto/notification.dto';
       inject: [ConfigService],
     },
   ],
-  exports: ['NOTIFICATION_QUEUE', NotificationService],
+  exports: [
+    'NOTIFICATION_QUEUE',
+    NotificationService,
+    NotificationBotHandlerService,
+  ],
 })
 export class NotificationModule implements OnModuleDestroy {
   constructor(

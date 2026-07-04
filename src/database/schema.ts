@@ -101,3 +101,16 @@ export const dlqJobs = sqliteTable('dlq_jobs', {
   retryHistory: text('retry_history'), // JSON array of retry attempt timestamps and reasons
   failedAt: text('failed_at').default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const otpVerifications = sqliteTable('otp_verifications', {
+  id: text('id').primaryKey(),
+  subscriptionId: text('subscription_id').references(() => subscriptions.id, {
+    onDelete: 'cascade',
+  }),
+  merchantId: text('merchant_id').references(() => merchants.id, {
+    onDelete: 'cascade',
+  }),
+  code: text('code').notNull(),
+  expiresAt: text('expires_at').notNull(), // ISO String
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});

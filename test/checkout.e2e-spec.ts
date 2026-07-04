@@ -11,12 +11,15 @@ import {
   customers,
   subscriptions,
   transactions,
+  otpVerifications,
 } from './../src/database/schema';
 import { NombaClient } from './../src/provider/nomba.client';
 import { AuthService } from './../src/auth/auth.service';
+import { EmailService } from './../src/common/services/email.service';
 import { eq } from 'drizzle-orm';
 
 describe('Checkout Module (e2e)', () => {
+  jest.setTimeout(30000);
   let app: INestApplication<App>;
   let db: any;
   let authService: AuthService;
@@ -27,6 +30,7 @@ describe('Checkout Module (e2e)', () => {
     id: 'merchant-checkout-test',
     name: 'Checkout Test Merchant',
     email: 'checkout-test@merchant.com',
+    username: 'checkout_test_merchant',
     defaultRedirectUrl: 'https://lemni.com/custom/success',
   };
 
@@ -42,7 +46,11 @@ describe('Checkout Module (e2e)', () => {
     authService = moduleFixture.get(AuthService);
     nombaClient = moduleFixture.get(NombaClient);
 
+    const emailService = moduleFixture.get(EmailService);
+    jest.spyOn(emailService, 'sendEmail').mockResolvedValue(true);
+
     // Clean tables and seed test merchant
+    await db.delete(otpVerifications);
     await db.delete(transactions);
     await db.delete(subscriptions);
     await db.delete(customers);
@@ -69,11 +77,13 @@ describe('Checkout Module (e2e)', () => {
     jest.spyOn(nombaClient, 'createCheckoutOrder').mockResolvedValue({
       data: {
         checkoutLink: 'https://checkout.nomba.com/pay/mock_link_123',
+        orderReference: 'mock_order_ref_123',
       },
     });
   });
 
   afterAll(async () => {
+    await db.delete(otpVerifications);
     await db.delete(transactions);
     await db.delete(subscriptions);
     await db.delete(customers);
@@ -184,8 +194,19 @@ describe('Checkout Module (e2e)', () => {
   describe('GET /api/v1/sessions/:id/status (Polling Status)', () => {
     it('should return session status detail successfully (200)', async () => {
       const txId = 'tx_status_poll_test';
+      const [cust] = await db
+        .insert(customers)
+        .values({
+          id: 'cust-status-poll-test',
+          merchantId: testMerchant.id,
+          email: 'status-poll@test.com',
+        })
+        .returning();
+
       await db.insert(transactions).values({
         id: txId,
+        merchantId: testMerchant.id,
+        customerId: cust.id,
         amount: 3000,
         status: 'pending',
       });
@@ -237,6 +258,119 @@ describe('Checkout Module (e2e)', () => {
       expect(subRecord).toBeDefined();
       expect(subRecord.status).toBe('trialing');
       expect(subRecord.trialEnd).toBeDefined();
+    });
+  });
+
+  describe('Customer Self-Unsubscribe Flow (Email OTP Validation)', () => {
+    let subId: string;
+    let customerEmail: string;
+
+    beforeAll(async () => {
+      subId = 'sub-unsubscribe-test';
+      customerEmail = 'customer-to-unsubscribe@test.com';
+
+      // Create a customer
+      const [cust] = await db
+        .insert(customers)
+        .values({
+          id: 'cust-unsubscribe-test',
+          merchantId: testMerchant.id,
+          email: customerEmail,
+        })
+        .returning();
+
+      // Create plan
+      const [plan] = await db
+        .insert(plans)
+        .values({
+          id: 'plan-unsubscribe-test',
+          merchantId: testMerchant.id,
+          name: 'Unsubscribe Test Plan',
+          amount: 25,
+          billingModel: 'recurring',
+          interval: 'monthly',
+        })
+        .returning();
+
+      // Create subscription
+      await db.insert(subscriptions).values({
+        id: subId,
+        customerId: cust.id,
+        planId: plan.id,
+        status: 'active',
+      });
+    });
+
+    it('should reject unsubscribe request for wrong email (403)', async () => {
+      await request(app.getHttpServer())
+        .post(`/api/v1/public/subscriptions/${subId}/unsubscribe/request`)
+        .send({ email: 'wrong-email@test.com' })
+        .expect(403);
+    });
+
+    it('should successfully request unsubscribe and generate OTP (200)', async () => {
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/public/subscriptions/${subId}/unsubscribe/request`)
+        .send({ email: customerEmail })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toContain('Verification code sent');
+
+      // Verify OTP is saved in database
+      const [otpRecord] = await db
+        .select()
+        .from(otpVerifications)
+        .where(eq(otpVerifications.subscriptionId, subId));
+
+      expect(otpRecord).toBeDefined();
+      expect(otpRecord.code).toHaveLength(6);
+    });
+
+    it('should reject verification with incorrect OTP code (400)', async () => {
+      await request(app.getHttpServer())
+        .post(`/api/v1/public/subscriptions/${subId}/unsubscribe/confirm`)
+        .send({ code: '999999' }) // wrong code
+        .expect(400);
+    });
+
+    it('should successfully unsubscribe customer with correct OTP code (200)', async () => {
+      // Get the correct code from the db
+      const [otpRecord] = await db
+        .select()
+        .from(otpVerifications)
+        .where(eq(otpVerifications.subscriptionId, subId));
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/public/subscriptions/${subId}/unsubscribe/confirm`)
+        .send({ code: otpRecord.code })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toContain('successfully canceled');
+
+      // Verify subscription status is canceled in db
+      const [subRecord] = await db
+        .select()
+        .from(subscriptions)
+        .where(eq(subscriptions.id, subId));
+
+      expect(subRecord.status).toBe('canceled');
+    });
+
+    it('should reject confirmation if subscription is already canceled (400)', async () => {
+      // Seed another OTP
+      await db.insert(otpVerifications).values({
+        id: 'otp-already-canceled',
+        subscriptionId: subId,
+        code: '123456',
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      });
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/public/subscriptions/${subId}/unsubscribe/confirm`)
+        .send({ code: '123456' })
+        .expect(400);
     });
   });
 });

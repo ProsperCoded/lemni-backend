@@ -71,6 +71,20 @@
       "when": 1783163236055,
       "tag": "0009_add_merchant_username",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1783165139139,
+      "tag": "0010_parallel_zombie",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1783165731401,
+      "tag": "0011_loose_surge",
+      "breakpoints": true
     }
   ]
 }
