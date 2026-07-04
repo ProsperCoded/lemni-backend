@@ -1,11 +1,10 @@
-import { Injectable, Inject, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
 import { merchants } from '../database/schema';
 import { TelegramClient } from './telegram-client';
 import type { TelegramUpdate } from './dto/telegram-update.dto';
-import * as crypto from 'crypto';
 
 @Injectable()
 export class NotificationBotHandlerService {

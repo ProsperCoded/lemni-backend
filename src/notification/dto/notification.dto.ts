@@ -21,3 +21,42 @@ export const NotificationJobPayloadSchema = z.object({
 export type NotificationJobPayload = z.infer<
   typeof NotificationJobPayloadSchema
 >;
+
+export const ConnectTelegramRequestSchema = z.object({
+  merchantId: z.string().min(1, 'merchantId is required'),
+  chatId: z.string().min(1, 'chatId is required'),
+  signature: z.string().min(1, 'signature is required'),
+  timestamp: z.string().min(1, 'timestamp is required'),
+});
+
+export type ConnectTelegramRequest = z.infer<
+  typeof ConnectTelegramRequestSchema
+>;
+
+export const ConnectTelegramResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+});
+
+export type ConnectTelegramResponse = z.infer<
+  typeof ConnectTelegramResponseSchema
+>;
+
+export const DisconnectTelegramResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+});
+
+export type DisconnectTelegramResponse = z.infer<
+  typeof DisconnectTelegramResponseSchema
+>;
+
+export const TelegramStatusResponseSchema = z.object({
+  connected: z.boolean(),
+  connectedAt: z.string().nullable(),
+  chatId: z.string().nullable(),
+});
+
+export type TelegramStatusResponse = z.infer<
+  typeof TelegramStatusResponseSchema
+>;

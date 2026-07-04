@@ -15,7 +15,9 @@ import { NotificationService } from './notification.service';
 import type { NotificationJobPayload } from './dto/notification.dto';
 
 @Injectable()
-export class NotificationWorkerService implements OnModuleInit, OnModuleDestroy {
+export class NotificationWorkerService
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger(NotificationWorkerService.name);
   private worker: Worker<NotificationJobPayload> | null = null;
 
@@ -82,9 +84,7 @@ export class NotificationWorkerService implements OnModuleInit, OnModuleDestroy 
         throw new Error('undeliverable_4xx');
       }
 
-      this.logger.error(
-        `[NotificationWorker] 5xx or transient error: ${msg}`,
-      );
+      this.logger.error(`[NotificationWorker] 5xx or transient error: ${msg}`);
       throw error;
     }
   }

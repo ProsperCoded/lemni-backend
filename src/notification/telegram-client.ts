@@ -42,9 +42,7 @@ export class TelegramClient {
           );
           throw new Error(`Telegram 4xx: ${errorMsg}`);
         } else {
-          this.logger.error(
-            `[Telegram] 5xx error (${errorCode}): ${errorMsg}`,
-          );
+          this.logger.error(`[Telegram] 5xx error (${errorCode}): ${errorMsg}`);
           throw new Error(`Telegram 5xx: ${errorMsg}`);
         }
       }

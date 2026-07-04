@@ -494,6 +494,63 @@ paths:
       summary: Reactivate a canceled subscription
       tags:
         - merchant-dashboard/billing
+  /api/v1/admin/telegram/connect:
+    post:
+      description: Bot calls this endpoint after merchant sends /start command
+      operationId: NotificationController_connectTelegram
+      parameters: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+          description: Telegram connected successfully
+      summary: Connect Telegram bot (called by bot after /start)
+      tags:
+        - merchant-dashboard/notifications
+  /api/v1/admin/telegram/disconnect:
+    delete:
+      description: Clears the Telegram chat ID for the authenticated merchant
+      operationId: NotificationController_disconnectTelegram
+      parameters: []
+      responses:
+        '200':
+          description: Telegram disconnected successfully
+      security:
+        - bearer: []
+      summary: Disconnect Telegram (merchant dashboard)
+      tags:
+        - merchant-dashboard/notifications
+  /api/v1/admin/telegram/status:
+    get:
+      description: Returns whether Telegram is connected for the merchant
+      operationId: NotificationController_getTelegramStatus
+      parameters: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  chatId:
+                    nullable: true
+                    type: string
+                  connected:
+                    type: boolean
+                  connectedAt:
+                    nullable: true
+                    type: string
+          description: Telegram connection status
+      security:
+        - bearer: []
+      summary: Check Telegram connection status
+      tags:
+        - merchant-dashboard/notifications
   /api/v1/checkout/plans/{planId}/sessions:
     post:
       description: Allows off-the-shelf payment links to initialize checkout sessions for customer emails.
@@ -869,6 +926,7 @@ paths:
           description: Invalid email, incorrect old password, or weak new password
       summary: Reset password using old password verification
       tags:
+        - merchant-dashboard/auth
         - merchant-dashboard/auth
   /auth/signup:
     post:

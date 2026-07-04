@@ -10,6 +10,7 @@ import {
   HttpStatus,
   UsePipes,
 } from '@nestjs/common';
+import type { Request as ExpressRequest } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -87,7 +88,7 @@ export class BillingController {
   @ApiResponse({ status: 401, description: 'Unauthorized JWT session token' })
   async createPlan(
     @Body() body: CreatePlanDto,
-    @Request() req: Record<string, unknown>,
+    @Request() req: ExpressRequest,
   ) {
     const merchantId = (req.user as Record<string, unknown>)
       .merchantId as string;
@@ -108,10 +109,7 @@ export class BillingController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized JWT session token' })
   @ApiResponse({ status: 404, description: 'Plan not found' })
-  async deletePlan(
-    @Param('id') id: string,
-    @Request() req: Record<string, unknown>,
-  ) {
+  async deletePlan(@Param('id') id: string, @Request() req: ExpressRequest) {
     const merchantId = (req.user as Record<string, unknown>)
       .merchantId as string;
     await this.billingService.deletePlan(merchantId, id);
@@ -167,7 +165,7 @@ export class BillingController {
   @ApiResponse({ status: 401, description: 'Unauthorized JWT session token' })
   async registerCustomer(
     @Body() body: RegisterCustomerDto,
-    @Request() req: Record<string, unknown>,
+    @Request() req: ExpressRequest,
   ) {
     const merchantId = (req.user as Record<string, unknown>)
       .merchantId as string;
@@ -221,7 +219,7 @@ export class BillingController {
   })
   async reactivateSubscription(
     @Param('id') id: string,
-    @Request() req: Record<string, unknown>,
+    @Request() req: ExpressRequest,
   ) {
     const merchantId = (req.user as Record<string, unknown>)
       .merchantId as string;

@@ -84,7 +84,7 @@ export class NotificationService {
       default:
         return (
           `📬 <b>Notification</b>\n\n` +
-          `Event: ${payload.eventType}\n` +
+          `Event: ${String(payload.eventType)}\n` +
           `${baseInfo}`
         );
     }

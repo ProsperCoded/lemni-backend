@@ -1,4 +1,11 @@
-import { Injectable, Inject, ConflictException, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  ConflictException,
+  UnauthorizedException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -139,7 +146,11 @@ export class AuthService {
   async login(
     email: string,
     password: string,
-  ): Promise<{ accessToken: string; refreshToken: string; merchant: { id: string; email: string; name: string } }> {
+  ): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    merchant: { id: string; email: string; name: string };
+  }> {
     const result = await this.db
       .select()
       .from(merchants)
@@ -150,7 +161,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const isPasswordValid = await bcrypt.compare(password, merchant.hashedPassword);
+    const isPasswordValid = await bcrypt.compare(
+      password,
+      merchant.hashedPassword,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -174,7 +188,9 @@ export class AuthService {
   /**
    * Refresh access token using refresh token
    */
-  async refreshAccessToken(refreshToken: string): Promise<{ accessToken: string }> {
+  async refreshAccessToken(
+    refreshToken: string,
+  ): Promise<{ accessToken: string }> {
     try {
       const payload = this.jwtService.verify(refreshToken);
       const accessToken = this.jwtService.sign(
@@ -190,7 +206,14 @@ export class AuthService {
   /**
    * List all API keys for a merchant (hides hashed keys, only shows keyId prefix)
    */
-  async listApiKeys(merchantId: string): Promise<Array<{ id: string; environment: string; isActive: boolean; createdAt: string | null }>> {
+  async listApiKeys(merchantId: string): Promise<
+    Array<{
+      id: string;
+      environment: string;
+      isActive: boolean;
+      createdAt: string | null;
+    }>
+  > {
     const keys = await this.db
       .select({
         id: apiKeys.id,
@@ -231,7 +254,11 @@ export class AuthService {
   /**
    * Reset password verifying old password.
    */
-  async resetPassword(email: string, oldPassword: string, newPassword: string): Promise<{ success: boolean }> {
+  async resetPassword(
+    email: string,
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<{ success: boolean }> {
     if (!newPassword || newPassword.length < 8) {
       throw new BadRequestException('Password must be at least 8 characters');
     }
@@ -249,7 +276,9 @@ export class AuthService {
 
     const isMatch = await bcrypt.compare(oldPassword, merchant.hashedPassword);
     if (!isMatch) {
-      this.logger.warn(`Password reset attempt with incorrect old password for: ${email}`);
+      this.logger.warn(
+        `Password reset attempt with incorrect old password for: ${email}`,
+      );
       throw new BadRequestException('Invalid email or password');
     }
 

@@ -10,6 +10,7 @@ import {
   NotFoundException,
   HttpCode,
 } from '@nestjs/common';
+import type { Request as ExpressRequest } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -64,7 +65,11 @@ export class AuthController {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid', example: '550e8400-e29b-41d4-a716-446655440000' },
+        id: {
+          type: 'string',
+          format: 'uuid',
+          example: '550e8400-e29b-41d4-a716-446655440000',
+        },
         email: { type: 'string', format: 'email', example: 'acme@example.com' },
         name: { type: 'string', example: 'Acme Corporation' },
       },
@@ -75,7 +80,7 @@ export class AuthController {
   async signup(
     @Body() body: { email: string; password: string; name: string },
   ) {
-    return this.authService.signup(body.email, body.password, body.name);
+    return await this.authService.signup(body.email, body.password, body.name);
   }
 
   @Post('login')
@@ -200,14 +205,16 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async logout() {
-    return { message: 'Successfully logged out. Please discard tokens.' };
+    return { message: 'Successfully logged out' };
   }
 
+  @ApiTags('merchant-dashboard/auth')
   @Post('reset-password')
   @HttpCode(200)
   @ApiOperation({
     summary: 'Reset password using old password verification',
-    description: 'Resets the password of the merchant account verifying their current old password.',
+    description:
+      'Resets the password of the merchant account verifying their current old password.',
   })
   @ApiBody({
     schema: {
@@ -246,9 +253,18 @@ export class AuthController {
       },
     },
   })
-  @ApiResponse({ status: 400, description: 'Invalid email, incorrect old password, or weak new password' })
-  async resetPassword(@Body() body: { email: string; oldPassword: string; newPassword: string }) {
-    return this.authService.resetPassword(body.email, body.oldPassword, body.newPassword);
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid email, incorrect old password, or weak new password',
+  })
+  async resetPassword(
+    @Body() body: { email: string; oldPassword: string; newPassword: string },
+  ) {
+    return this.authService.resetPassword(
+      body.email,
+      body.oldPassword,
+      body.newPassword,
+    );
   }
 }
 
@@ -275,7 +291,8 @@ export class ApiKeysController {
           type: 'string',
           enum: ['test', 'live'],
           example: 'test',
-          description: 'API key environment. Use "test" for development, "live" for production.',
+          description:
+            'API key environment. Use "test" for development, "live" for production.',
         },
       },
     },
@@ -289,7 +306,8 @@ export class ApiKeysController {
         rawKey: {
           type: 'string',
           example: 'sk_test_abc123def456_xyz789abc123def456xyz789abc123',
-          description: 'Complete API key. Store this securely - you will not see it again.',
+          description:
+            'Complete API key. Store this securely - you will not see it again.',
         },
         keyId: {
           type: 'string',
@@ -298,7 +316,8 @@ export class ApiKeysController {
         },
         message: {
           type: 'string',
-          example: 'Store this key safely. You will not be able to see it again.',
+          example:
+            'Store this key safely. You will not be able to see it again.',
           description: 'Security reminder',
         },
       },
@@ -308,10 +327,9 @@ export class ApiKeysController {
   @ApiResponse({ status: 401, description: 'Missing or invalid JWT token' })
   async generateKey(
     @Body() body: { environment: 'test' | 'live' },
-    @Request() req: Record<string, unknown>,
+    @Request() req: ExpressRequest,
   ) {
-    const merchantId = (req.user as Record<string, unknown>)
-      .sub as string;
+    const merchantId = (req.user as Record<string, unknown>).sub as string;
     return this.authService.createApiKey(merchantId, body.environment);
   }
 
@@ -357,9 +375,8 @@ export class ApiKeysController {
     },
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid JWT token' })
-  async listKeys(@Request() req: Record<string, unknown>) {
-    const merchantId = (req.user as Record<string, unknown>)
-      .sub as string;
+  async listKeys(@Request() req: ExpressRequest) {
+    const merchantId = (req.user as Record<string, unknown>).sub as string;
     return this.authService.listApiKeys(merchantId);
   }
 
@@ -387,12 +404,8 @@ export class ApiKeysController {
     status: 404,
     description: 'API key not found or does not belong to this merchant',
   })
-  async revokeKey(
-    @Param('id') id: string,
-    @Request() req: Record<string, unknown>,
-  ) {
-    const merchantId = (req.user as Record<string, unknown>)
-      .sub as string;
+  async revokeKey(@Param('id') id: string, @Request() req: ExpressRequest) {
+    const merchantId = (req.user as Record<string, unknown>).sub as string;
     const success = await this.authService.revokeApiKey(merchantId, id);
     if (!success) {
       throw new NotFoundException(

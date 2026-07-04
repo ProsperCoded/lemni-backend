@@ -3,7 +3,7 @@ import { Queue } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
-import { transactions, subscriptions, plans, merchants } from '../database/schema';
+import { transactions, subscriptions, plans } from '../database/schema';
 import { computeNextPeriodEnd } from '../billing/billing-period.util';
 import type { NombaWebhookEventDto } from './dto/webhook.dto';
 import type { NotificationJobPayload } from '../notification/dto/notification.dto';
@@ -59,24 +59,22 @@ export class WebhookService {
         });
 
         if (sub) {
-          const [merchant] = await this.db.query.merchants.findFirst({
-            where: eq(merchants.id, sub.customerId),
-          });
-
           const plan = await this.db.query.plans.findFirst({
             where: eq(plans.id, sub.planId),
           });
 
           await this.advanceSubscription(tx.subscriptionId);
 
-          await this.notificationQueue.add('notification', {
-            merchantId: plan?.merchantId || 'unknown',
-            eventType: 'payment_success',
-            subscriptionId: tx.subscriptionId,
-            transactionId: tx.id,
-            amount: tx.amount || 0,
-            timestamp: new Date().toISOString(),
-          });
+          if (plan) {
+            await this.notificationQueue.add('notification', {
+              merchantId: plan.merchantId,
+              eventType: 'payment_success',
+              subscriptionId: tx.subscriptionId,
+              transactionId: tx.id,
+              amount: tx.amount || 0,
+              timestamp: new Date().toISOString(),
+            });
+          }
         }
       }
       return { status: 'processed' };

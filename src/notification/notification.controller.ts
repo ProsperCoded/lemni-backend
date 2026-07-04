@@ -10,27 +10,30 @@ import {
   Logger,
   UseGuards,
   Request,
+  UsePipes,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import type { Request as ExpressRequest } from 'express';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
 import { eq } from 'drizzle-orm';
 import { merchants } from '../database/schema';
 import * as crypto from 'crypto';
-
-interface ConnectTelegramRequest {
-  merchantId: string;
-  chatId: string;
-  signature: string;
-  timestamp: string;
-}
-
-interface ConnectTelegramResponse {
-  success: boolean;
-  message: string;
-}
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { ConnectTelegramRequestSchema } from './dto/notification.dto';
+import type {
+  ConnectTelegramRequest,
+  ConnectTelegramResponse,
+  DisconnectTelegramResponse,
+  TelegramStatusResponse,
+} from './dto/notification.dto';
 
 @ApiTags('merchant-dashboard/notifications')
 @Controller('api/v1/admin/telegram')
@@ -42,12 +45,12 @@ export class NotificationController {
     @Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB,
     private readonly configService: ConfigService,
   ) {
-    this.botSecret = this.configService.get<string>(
-      'TELEGRAM_BOT_SECRET',
-    ) || '';
+    this.botSecret =
+      this.configService.get<string>('TELEGRAM_BOT_SECRET') || '';
   }
 
   @Post('connect')
+  @UsePipes(new ZodValidationPipe(ConnectTelegramRequestSchema))
   @ApiOperation({
     summary: 'Connect Telegram bot (called by bot after /start)',
     description: 'Bot calls this endpoint after merchant sends /start command',
@@ -66,10 +69,6 @@ export class NotificationController {
     @Body() body: ConnectTelegramRequest,
   ): Promise<ConnectTelegramResponse> {
     const { merchantId, chatId, signature, timestamp } = body;
-
-    if (!merchantId || !chatId || !signature || !timestamp) {
-      throw new BadRequestException('Missing required fields');
-    }
 
     const now = Date.now();
     const requestTime = parseInt(timestamp, 10);
@@ -134,9 +133,9 @@ export class NotificationController {
     description: 'Telegram disconnected successfully',
   })
   async disconnectTelegram(
-    @Request() req: any,
-  ): Promise<ConnectTelegramResponse> {
-    const merchantId = req.user?.sub;
+    @Request() req: ExpressRequest,
+  ): Promise<DisconnectTelegramResponse> {
+    const merchantId = (req.user as Record<string, string>)?.sub;
 
     if (!merchantId) {
       throw new UnauthorizedException('Merchant not authenticated');
@@ -175,8 +174,10 @@ export class NotificationController {
       },
     },
   })
-  async getTelegramStatus(@Request() req: any) {
-    const merchantId = req.user?.sub;
+  async getTelegramStatus(
+    @Request() req: ExpressRequest,
+  ): Promise<TelegramStatusResponse> {
+    const merchantId = (req.user as Record<string, string>)?.sub;
 
     if (!merchantId) {
       throw new UnauthorizedException('Merchant not authenticated');

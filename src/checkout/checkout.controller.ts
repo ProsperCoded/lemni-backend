@@ -19,6 +19,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { ApiKeyGuard } from '../auth/guards/api-key.guard';
+import type { AuthenticatedRequest } from '../auth/guards/api-key.guard';
 import { CheckoutService } from './checkout.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import {
@@ -83,11 +84,11 @@ export class CheckoutController {
   @ApiResponse({ status: 401, description: 'Unauthorized API key' })
   async createOneTimePayment(
     @Body() body: OneTimePaymentDto,
-    @Request() req: Record<string, unknown>,
+    @Request() req: AuthenticatedRequest,
   ) {
     return this.checkoutService.createOneTimePayment(
-      req.merchantId as string,
-      req.environment as 'test' | 'live',
+      req.merchantId,
+      req.environment,
       body,
     );
   }
@@ -145,11 +146,11 @@ export class CheckoutController {
   @ApiResponse({ status: 404, description: 'Plan not found' })
   async createSubscriptionPayment(
     @Body() body: SubscriptionPaymentDto,
-    @Request() req: Record<string, unknown>,
+    @Request() req: AuthenticatedRequest,
   ) {
     return this.checkoutService.createSubscriptionPayment(
-      req.merchantId as string,
-      req.environment as 'test' | 'live',
+      req.merchantId,
+      req.environment,
       body,
     );
   }
