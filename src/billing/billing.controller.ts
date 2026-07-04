@@ -1,5 +1,22 @@
-import { Controller, Post, Delete, Body, Param, UseGuards, Request, HttpCode, HttpStatus, UsePipes } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  HttpCode,
+  HttpStatus,
+  UsePipes,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiBody,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BillingService } from './billing.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -17,7 +34,8 @@ export class BillingController {
   @UsePipes(new ZodValidationPipe(CreatePlanSchema))
   @ApiOperation({
     summary: 'Create a billing plan',
-    description: 'Registers a new recurring or one-time subscription plan in the system.',
+    description:
+      'Registers a new recurring or one-time subscription plan in the system.',
   })
   @ApiBody({
     schema: {
@@ -26,11 +44,25 @@ export class BillingController {
       properties: {
         name: { type: 'string', example: 'Standard Subscription Plan' },
         amount: { type: 'number', format: 'float', example: 29.99 },
-        billingModel: { type: 'string', enum: ['recurring', 'one_time', 'custom_input'], default: 'recurring', example: 'recurring' },
-        interval: { type: 'string', enum: ['weekly', 'monthly', 'yearly'], example: 'monthly' },
+        billingModel: {
+          type: 'string',
+          enum: ['recurring', 'one_time', 'custom_input'],
+          default: 'recurring',
+          example: 'recurring',
+        },
+        interval: {
+          type: 'string',
+          enum: ['weekly', 'monthly', 'yearly'],
+          example: 'monthly',
+        },
         trialDays: { type: 'integer', format: 'int32', default: 0, example: 7 },
         trialRequireCard: { type: 'boolean', default: false, example: true },
-        gracePeriodDays: { type: 'integer', format: 'int32', default: 0, example: 3 },
+        gracePeriodDays: {
+          type: 'integer',
+          format: 'int32',
+          default: 0,
+          example: 3,
+        },
       },
     },
   })
@@ -55,9 +87,10 @@ export class BillingController {
   @ApiResponse({ status: 401, description: 'Unauthorized JWT session token' })
   async createPlan(
     @Body() body: CreatePlanDto,
-    @Request() req: any,
+    @Request() req: Record<string, unknown>,
   ) {
-    const merchantId = req.user.merchantId;
+    const merchantId = (req.user as Record<string, unknown>)
+      .merchantId as string;
     return this.billingService.createPlan(merchantId, body);
   }
 
@@ -65,14 +98,22 @@ export class BillingController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Delete a billing plan',
-    description: 'Removes a subscription plan if no active or trialing customers are attached to it.',
+    description:
+      'Removes a subscription plan if no active or trialing customers are attached to it.',
   })
   @ApiResponse({ status: 204, description: 'Plan successfully deleted' })
-  @ApiResponse({ status: 400, description: 'Cannot delete plan due to active subscriptions' })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot delete plan due to active subscriptions',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized JWT session token' })
   @ApiResponse({ status: 404, description: 'Plan not found' })
-  async deletePlan(@Param('id') id: string, @Request() req: any) {
-    const merchantId = req.user.merchantId;
+  async deletePlan(
+    @Param('id') id: string,
+    @Request() req: Record<string, unknown>,
+  ) {
+    const merchantId = (req.user as Record<string, unknown>)
+      .merchantId as string;
     await this.billingService.deletePlan(merchantId, id);
   }
 
@@ -80,14 +121,19 @@ export class BillingController {
   @UsePipes(new ZodValidationPipe(RegisterCustomerSchema))
   @ApiOperation({
     summary: 'Register a customer',
-    description: 'Registers a customer under the current merchant, preparing them for subscription charges.',
+    description:
+      'Registers a customer under the current merchant, preparing them for subscription charges.',
   })
   @ApiBody({
     schema: {
       type: 'object',
       required: ['email'],
       properties: {
-        email: { type: 'string', format: 'email', example: 'customer@test.com' },
+        email: {
+          type: 'string',
+          format: 'email',
+          example: 'customer@test.com',
+        },
         metadata: {
           type: 'object',
           additionalProperties: true,
@@ -104,18 +150,27 @@ export class BillingController {
       properties: {
         id: { type: 'string', example: 'cust_8a9d2ca8b10' },
         merchantId: { type: 'string', example: 'merchant-test-123' },
-        email: { type: 'string', format: 'email', example: 'customer@test.com' },
+        email: {
+          type: 'string',
+          format: 'email',
+          example: 'customer@test.com',
+        },
         nombaToken: { type: 'string', nullable: true, example: null },
-        createdAt: { type: 'string', format: 'date-time', example: '2026-07-04T02:00:00.000Z' },
+        createdAt: {
+          type: 'string',
+          format: 'date-time',
+          example: '2026-07-04T02:00:00.000Z',
+        },
       },
     },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized JWT session token' })
   async registerCustomer(
     @Body() body: RegisterCustomerDto,
-    @Request() req: any,
+    @Request() req: Record<string, unknown>,
   ) {
-    const merchantId = req.user.merchantId;
+    const merchantId = (req.user as Record<string, unknown>)
+      .merchantId as string;
     return this.billingService.registerCustomer(merchantId, body);
   }
 
@@ -123,7 +178,8 @@ export class BillingController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Reactivate a canceled subscription',
-    description: 'Resets the billing cycle start date and shifts the subscription back to active status.',
+    description:
+      'Resets the billing cycle start date and shifts the subscription back to active status.',
   })
   @ApiResponse({
     status: 200,
@@ -135,17 +191,40 @@ export class BillingController {
         customerId: { type: 'string', example: 'cust_8a9d2ca8b10' },
         planId: { type: 'string', example: 'plan_7a8dca9' },
         status: { type: 'string', example: 'active' },
-        currentPeriodEnd: { type: 'string', format: 'date-time', example: '2026-08-04T02:00:00.000Z' },
-        trialEnd: { type: 'string', format: 'date-time', nullable: true, example: null },
-        createdAt: { type: 'string', format: 'date-time', example: '2026-07-04T02:00:00.000Z' },
+        currentPeriodEnd: {
+          type: 'string',
+          format: 'date-time',
+          example: '2026-08-04T02:00:00.000Z',
+        },
+        trialEnd: {
+          type: 'string',
+          format: 'date-time',
+          nullable: true,
+          example: null,
+        },
+        createdAt: {
+          type: 'string',
+          format: 'date-time',
+          example: '2026-07-04T02:00:00.000Z',
+        },
       },
     },
   })
-  @ApiResponse({ status: 400, description: 'Subscription is not canceled or card is missing' })
+  @ApiResponse({
+    status: 400,
+    description: 'Subscription is not canceled or card is missing',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized JWT session token' })
-  @ApiResponse({ status: 404, description: 'Subscription or associated plan not found' })
-  async reactivateSubscription(@Param('id') id: string, @Request() req: any) {
-    const merchantId = req.user.merchantId;
+  @ApiResponse({
+    status: 404,
+    description: 'Subscription or associated plan not found',
+  })
+  async reactivateSubscription(
+    @Param('id') id: string,
+    @Request() req: Record<string, unknown>,
+  ) {
+    const merchantId = (req.user as Record<string, unknown>)
+      .merchantId as string;
     return this.billingService.reactivateSubscription(merchantId, id);
   }
 }

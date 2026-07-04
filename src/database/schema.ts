@@ -40,12 +40,16 @@ export const plans = sqliteTable('plans', {
     .references(() => merchants.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   amount: real('amount').notNull(),
-  billingModel: text('billing_model', { enum: ['recurring', 'one_time', 'custom_input'] })
+  billingModel: text('billing_model', {
+    enum: ['recurring', 'one_time', 'custom_input'],
+  })
     .notNull()
     .default('recurring'),
   interval: text('interval', { enum: ['weekly', 'monthly', 'yearly'] }),
   trialDays: integer('trial_days').notNull().default(0),
-  trialRequireCard: integer('trial_require_card', { mode: 'boolean' }).notNull().default(false),
+  trialRequireCard: integer('trial_require_card', { mode: 'boolean' })
+    .notNull()
+    .default(false),
   gracePeriodDays: integer('grace_period_days').notNull().default(0),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
@@ -58,7 +62,9 @@ export const subscriptions = sqliteTable('subscriptions', {
   planId: text('plan_id')
     .notNull()
     .references(() => plans.id, { onDelete: 'cascade' }),
-  status: text('status', { enum: ['trialing', 'active', 'past_due', 'canceled'] }).notNull(),
+  status: text('status', {
+    enum: ['trialing', 'active', 'past_due', 'canceled'],
+  }).notNull(),
   currentPeriodEnd: text('current_period_end'), // ISO String
   trialEnd: text('trial_end'), // ISO String
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
@@ -66,8 +72,9 @@ export const subscriptions = sqliteTable('subscriptions', {
 
 export const transactions = sqliteTable('transactions', {
   id: text('id').primaryKey(),
-  subscriptionId: text('subscription_id')
-    .references(() => subscriptions.id, { onDelete: 'set null' }),
+  subscriptionId: text('subscription_id').references(() => subscriptions.id, {
+    onDelete: 'set null',
+  }),
   amount: real('amount').notNull(),
   status: text('status', { enum: ['pending', 'success', 'failed'] }).notNull(),
   nombaRef: text('nomba_ref'),
@@ -78,12 +85,11 @@ export const transactions = sqliteTable('transactions', {
 
 export const dlqJobs = sqliteTable('dlq_jobs', {
   id: text('id').primaryKey(), // BullMQ job ID
-  subscriptionId: text('subscription_id')
-    .references(() => subscriptions.id, { onDelete: 'set null' }),
+  subscriptionId: text('subscription_id').references(() => subscriptions.id, {
+    onDelete: 'set null',
+  }),
   payload: text('payload').notNull(), // Full job payload JSON
   errorReason: text('error_reason').notNull(),
   retryHistory: text('retry_history'), // JSON array of retry attempt timestamps and reasons
   failedAt: text('failed_at').default(sql`CURRENT_TIMESTAMP`),
 });
-
-

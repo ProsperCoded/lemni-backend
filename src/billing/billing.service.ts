@@ -1,4 +1,9 @@
-import { Injectable, Inject, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
 import { plans, customers, subscriptions } from '../database/schema';
@@ -7,9 +12,7 @@ import * as crypto from 'crypto';
 
 @Injectable()
 export class BillingService {
-  constructor(
-    @Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB,
-  ) {}
+  constructor(@Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB) {}
 
   /**
    * Creates a new pricing plan for a merchant.
@@ -41,7 +44,7 @@ export class BillingService {
         gracePeriodDays: data.gracePeriodDays || 0,
       })
       .returning();
-    
+
     return newPlan;
   }
 
@@ -70,7 +73,9 @@ export class BillingService {
       );
 
     if (activeSubs.length > 0) {
-      throw new ForbiddenException('Cannot delete plan: customers have active subscriptions attached to it');
+      throw new ForbiddenException(
+        'Cannot delete plan: customers have active subscriptions attached to it',
+      );
     }
 
     await this.db.delete(plans).where(eq(plans.id, planId));
@@ -93,7 +98,7 @@ export class BillingService {
         metadata: data.metadata ? JSON.stringify(data.metadata) : null,
       })
       .returning();
-    
+
     return customer;
   }
 
@@ -106,7 +111,7 @@ export class BillingService {
       .set({ nombaToken })
       .where(eq(customers.id, customerId))
       .returning();
-    
+
     if (!updated) {
       throw new NotFoundException('Customer not found');
     }
@@ -116,7 +121,9 @@ export class BillingService {
   /**
    * Evaluates subscription period against configured plan grace periods and handles status transitions.
    */
-  async evaluateSubscriptionGracePeriod(subscriptionId: string): Promise<string> {
+  async evaluateSubscriptionGracePeriod(
+    subscriptionId: string,
+  ): Promise<string> {
     const [sub] = await this.db
       .select()
       .from(subscriptions)
@@ -143,7 +150,9 @@ export class BillingService {
     }
 
     const gracePeriodDays = plan?.gracePeriodDays || 0;
-    const gracePeriodEnd = new Date(periodEnd.getTime() + gracePeriodDays * 24 * 60 * 60 * 1000);
+    const gracePeriodEnd = new Date(
+      periodEnd.getTime() + gracePeriodDays * 24 * 60 * 60 * 1000,
+    );
 
     let newStatus = sub.status;
     if (now > gracePeriodEnd) {
@@ -183,14 +192,21 @@ export class BillingService {
     const [customer] = await this.db
       .select()
       .from(customers)
-      .where(and(eq(customers.id, sub.customerId), eq(customers.merchantId, merchantId)));
+      .where(
+        and(
+          eq(customers.id, sub.customerId),
+          eq(customers.merchantId, merchantId),
+        ),
+      );
 
     if (!customer) {
       throw new ForbiddenException('Customer access denied');
     }
 
     if (!customer.nombaToken) {
-      throw new ForbiddenException('Customer card token has expired or is missing; re-tokenization required');
+      throw new ForbiddenException(
+        'Customer card token has expired or is missing; re-tokenization required',
+      );
     }
 
     // Verify plan exists
@@ -200,7 +216,9 @@ export class BillingService {
       .where(eq(plans.id, sub.planId));
 
     if (!plan) {
-      throw new NotFoundException('The plan associated with this subscription has been deleted or archived');
+      throw new NotFoundException(
+        'The plan associated with this subscription has been deleted or archived',
+      );
     }
 
     // Reset billing period start from today
@@ -209,7 +227,9 @@ export class BillingService {
     if (plan.interval === 'weekly') daysToAdd = 7;
     else if (plan.interval === 'yearly') daysToAdd = 365;
 
-    const nextPeriodEnd = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000).toISOString();
+    const nextPeriodEnd = new Date(
+      now.getTime() + daysToAdd * 24 * 60 * 60 * 1000,
+    ).toISOString();
 
     const [updated] = await this.db
       .update(subscriptions)

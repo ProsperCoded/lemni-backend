@@ -1,11 +1,14 @@
-import { PipeTransform, ArgumentMetadata, BadRequestException } from '@nestjs/common';
+import {
+  PipeTransform,
+  ArgumentMetadata,
+  BadRequestException,
+} from '@nestjs/common';
 import { ZodSchema } from 'zod';
 
 export class ZodValidationPipe implements PipeTransform {
   constructor(private readonly schema: ZodSchema) {}
 
-  transform(value: unknown, metadata: ArgumentMetadata) {
-    // Only validate body or query payloads; ignore route params if not targeted
+  transform(value: unknown, metadata: ArgumentMetadata): unknown {
     if (metadata.type !== 'body' && metadata.type !== 'query') {
       return value;
     }
@@ -17,6 +20,6 @@ export class ZodValidationPipe implements PipeTransform {
         errors: result.error.errors,
       });
     }
-    return result.data;
+    return result.data as unknown;
   }
 }

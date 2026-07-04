@@ -24,7 +24,10 @@ export default () => {
   const result = EnvironmentSchema.safeParse(process.env);
 
   if (!result.success) {
-    console.error('❌ Invalid environment configuration:', result.error.format());
+    console.error(
+      '❌ Invalid environment configuration:',
+      result.error.format(),
+    );
     throw new Error('Invalid environment configuration');
   }
 

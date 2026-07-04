@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthService } from '../auth.service';
 
 @Injectable()
@@ -6,8 +11,13 @@ export class ApiKeyGuard implements CanActivate {
   constructor(private readonly authService: AuthService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
-    const authHeader = request.headers['authorization'];
+    const httpContext = context.switchToHttp();
+    const rawRequest: unknown = httpContext.getRequest();
+    const request = rawRequest as Record<string, unknown>;
+    const headers = (request.headers as Record<string, unknown>) || {};
+    const authHeader = (
+      (headers['authorization'] as string | undefined) || ''
+    ).trim();
 
     if (!authHeader) {
       throw new UnauthorizedException('Missing authorization header');
@@ -15,7 +25,9 @@ export class ApiKeyGuard implements CanActivate {
 
     const [type, token] = authHeader.split(' ');
     if (type !== 'Bearer' || !token) {
-      throw new UnauthorizedException('Invalid authorization scheme. Use Bearer <API_KEY>');
+      throw new UnauthorizedException(
+        'Invalid authorization scheme. Use Bearer <API_KEY>',
+      );
     }
 
     const authContext = await this.authService.validateApiKey(token);
@@ -23,7 +35,6 @@ export class ApiKeyGuard implements CanActivate {
       throw new UnauthorizedException('Invalid or inactive API key');
     }
 
-    // Attach merchant info and environment mode to the request context
     request.merchantId = authContext.merchantId;
     request.environment = authContext.environment;
 

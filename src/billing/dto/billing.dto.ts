@@ -4,7 +4,9 @@ export const CreatePlanSchema = z
   .object({
     name: z.string().min(1, 'Plan name is required'),
     amount: z.number().positive('Amount must be a positive number'),
-    billingModel: z.enum(['recurring', 'one_time', 'custom_input']).default('recurring'),
+    billingModel: z
+      .enum(['recurring', 'one_time', 'custom_input'])
+      .default('recurring'),
     interval: z.enum(['weekly', 'monthly', 'yearly']).optional(),
     trialDays: z.number().int().nonnegative().default(0),
     trialRequireCard: z.boolean().default(false),

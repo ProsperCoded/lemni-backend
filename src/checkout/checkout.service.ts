@@ -1,8 +1,14 @@
-import { Injectable, Inject, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
 import { NombaClient } from '../provider/nomba.client';
-import { customers, plans, subscriptions, transactions, merchants } from '../database/schema';
+import {
+  customers,
+  plans,
+  subscriptions,
+  transactions,
+  merchants,
+} from '../database/schema';
 import { eq, and } from 'drizzle-orm';
 import * as crypto from 'crypto';
 
@@ -20,7 +26,9 @@ export class CheckoutService {
     const [existing] = await this.db
       .select()
       .from(customers)
-      .where(and(eq(customers.email, email), eq(customers.merchantId, merchantId)));
+      .where(
+        and(eq(customers.email, email), eq(customers.merchantId, merchantId)),
+      );
 
     if (existing) {
       return existing;
@@ -42,7 +50,10 @@ export class CheckoutService {
   /**
    * Helper to resolve the callback/redirect URL for the customer.
    */
-  private async resolveCallbackUrl(merchantId: string, customCallback?: string): Promise<string> {
+  private async resolveCallbackUrl(
+    merchantId: string,
+    customCallback?: string,
+  ): Promise<string> {
     if (customCallback) {
       return customCallback;
     }
@@ -64,8 +75,11 @@ export class CheckoutService {
     data: { amount: number; email: string; callbackUrl?: string },
   ) {
     const customer = await this.getOrCreateCustomer(merchantId, data.email);
-    const callbackUrl = await this.resolveCallbackUrl(merchantId, data.callbackUrl);
-    
+    const callbackUrl = await this.resolveCallbackUrl(
+      merchantId,
+      data.callbackUrl,
+    );
+
     const transactionId = `tx_${crypto.randomBytes(12).toString('hex')}`;
 
     // Nomba checkout order payload
@@ -88,14 +102,20 @@ export class CheckoutService {
     });
 
     try {
-      const response = await this.nombaClient.createCheckoutOrder(transactionId, orderPayload);
+      const response = (await this.nombaClient.createCheckoutOrder(
+        transactionId,
+        orderPayload,
+      )) as Record<string, unknown>;
       return {
         sessionId: transactionId,
-        checkoutUrl: response.data.checkoutLink,
+        checkoutUrl: (response.data as Record<string, unknown>)
+          .checkoutLink as string,
       };
     } catch (error) {
-      // Revert transaction state on immediate provider failure
-      await this.db.update(transactions).set({ status: 'failed' }).where(eq(transactions.id, transactionId));
+      await this.db
+        .update(transactions)
+        .set({ status: 'failed' })
+        .where(eq(transactions.id, transactionId));
       throw error;
     }
   }
@@ -118,15 +138,21 @@ export class CheckoutService {
     }
 
     const customer = await this.getOrCreateCustomer(merchantId, data.email);
-    const callbackUrl = await this.resolveCallbackUrl(merchantId, data.callbackUrl);
+    const callbackUrl = await this.resolveCallbackUrl(
+      merchantId,
+      data.callbackUrl,
+    );
 
     const subscriptionId = `sub_${crypto.randomBytes(8).toString('hex')}`;
     const transactionId = `tx_${crypto.randomBytes(12).toString('hex')}`;
 
     const now = new Date();
-    const trialEnd = plan.trialDays > 0 
-      ? new Date(now.getTime() + plan.trialDays * 24 * 60 * 60 * 1000).toISOString()
-      : null;
+    const trialEnd =
+      plan.trialDays > 0
+        ? new Date(
+            now.getTime() + plan.trialDays * 24 * 60 * 60 * 1000,
+          ).toISOString()
+        : null;
 
     // Create pending subscription record
     await this.db.insert(subscriptions).values({
@@ -157,14 +183,21 @@ export class CheckoutService {
     };
 
     try {
-      const response = await this.nombaClient.createCheckoutOrder(transactionId, orderPayload);
+      const response = (await this.nombaClient.createCheckoutOrder(
+        transactionId,
+        orderPayload,
+      )) as Record<string, unknown>;
       return {
         sessionId: transactionId,
         subscriptionId,
-        checkoutUrl: response.data.checkoutLink,
+        checkoutUrl: (response.data as Record<string, unknown>)
+          .checkoutLink as string,
       };
     } catch (error) {
-      await this.db.update(transactions).set({ status: 'failed' }).where(eq(transactions.id, transactionId));
+      await this.db
+        .update(transactions)
+        .set({ status: 'failed' })
+        .where(eq(transactions.id, transactionId));
       throw error;
     }
   }
@@ -194,7 +227,10 @@ export class CheckoutService {
   /**
    * Public endpoint to checkout a plan (supporting off-the-shelf URL links)
    */
-  async createPublicPlanSession(planId: string, data: { email: string; callbackUrl?: string }) {
+  async createPublicPlanSession(
+    planId: string,
+    data: { email: string; callbackUrl?: string },
+  ) {
     const [plan] = await this.db
       .select()
       .from(plans)

@@ -4,7 +4,14 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { DRIZZLE_PROVIDER } from './../src/database/database.provider';
-import { merchants, apiKeys, plans, customers, subscriptions, transactions } from './../src/database/schema';
+import {
+  merchants,
+  apiKeys,
+  plans,
+  customers,
+  subscriptions,
+  transactions,
+} from './../src/database/schema';
 import { NombaClient } from './../src/provider/nomba.client';
 import { AuthService } from './../src/auth/auth.service';
 import { eq } from 'drizzle-orm';
@@ -95,14 +102,16 @@ describe('Checkout Module (e2e)', () => {
         .expect(200);
 
       expect(response.body.sessionId).toBeDefined();
-      expect(response.body.checkoutUrl).toBe('https://checkout.nomba.com/pay/mock_link_123');
+      expect(response.body.checkoutUrl).toBe(
+        'https://checkout.nomba.com/pay/mock_link_123',
+      );
 
       // Verify customer was dynamically created in DB
       const [customerRecord] = await db
         .select()
         .from(customers)
         .where(eq(customers.email, 'new-customer@checkout.com'));
-      
+
       expect(customerRecord).toBeDefined();
       expect(customerRecord.merchantId).toBe(testMerchant.id);
 
@@ -148,7 +157,9 @@ describe('Checkout Module (e2e)', () => {
 
       expect(response.body.sessionId).toBeDefined();
       expect(response.body.subscriptionId).toBeDefined();
-      expect(response.body.checkoutUrl).toBe('https://checkout.nomba.com/pay/mock_link_123');
+      expect(response.body.checkoutUrl).toBe(
+        'https://checkout.nomba.com/pay/mock_link_123',
+      );
 
       // Verify subscription record was created
       const [subRecord] = await db
@@ -213,7 +224,9 @@ describe('Checkout Module (e2e)', () => {
         .expect(200);
 
       expect(response.body.sessionId).toBeDefined();
-      expect(response.body.checkoutUrl).toBe('https://checkout.nomba.com/pay/mock_link_123');
+      expect(response.body.checkoutUrl).toBe(
+        'https://checkout.nomba.com/pay/mock_link_123',
+      );
 
       // Verify subscription record status (should be trialing due to trialDays: 7)
       const [subRecord] = await db

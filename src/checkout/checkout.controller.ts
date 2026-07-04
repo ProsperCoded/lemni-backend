@@ -1,5 +1,23 @@
-import { Controller, Post, Get, Body, Param, UseGuards, Request, UsePipes, HttpStatus, HttpCode } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiHeader, ApiParam, ApiBody } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  UsePipes,
+  HttpStatus,
+  HttpCode,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiHeader,
+  ApiParam,
+  ApiBody,
+} from '@nestjs/swagger';
 import { ApiKeyGuard } from '../auth/guards/api-key.guard';
 import { CheckoutService } from './checkout.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -19,7 +37,11 @@ import type {
 export class CheckoutController {
   constructor(private readonly checkoutService: CheckoutService) {}
 
-  @ApiHeader({ name: 'Authorization', description: 'Bearer <API_KEY>', required: true })
+  @ApiHeader({
+    name: 'Authorization',
+    description: 'Bearer <API_KEY>',
+    required: true,
+  })
   @Post('pay')
   @HttpCode(HttpStatus.OK)
   @UseGuards(ApiKeyGuard)
@@ -33,9 +55,13 @@ export class CheckoutController {
       type: 'object',
       required: ['amount', 'email'],
       properties: {
-        amount: { type: 'number', format: 'float', example: 5000.00 },
+        amount: { type: 'number', format: 'float', example: 5000.0 },
         email: { type: 'string', format: 'email', example: 'payer@test.com' },
-        callbackUrl: { type: 'string', format: 'uri', example: 'https://mywebsite.com/payment-success' },
+        callbackUrl: {
+          type: 'string',
+          format: 'uri',
+          example: 'https://mywebsite.com/payment-success',
+        },
       },
     },
   })
@@ -46,26 +72,39 @@ export class CheckoutController {
       type: 'object',
       properties: {
         sessionId: { type: 'string', example: 'tx_1234567890abcdef' },
-        checkoutUrl: { type: 'string', format: 'uri', example: 'https://checkout.nomba.com/pay/mock_link_123' },
+        checkoutUrl: {
+          type: 'string',
+          format: 'uri',
+          example: 'https://checkout.nomba.com/pay/mock_link_123',
+        },
       },
     },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized API key' })
   async createOneTimePayment(
     @Body() body: OneTimePaymentDto,
-    @Request() req: any,
+    @Request() req: Record<string, unknown>,
   ) {
-    return this.checkoutService.createOneTimePayment(req.merchantId, req.environment, body);
+    return this.checkoutService.createOneTimePayment(
+      req.merchantId as string,
+      req.environment as 'test' | 'live',
+      body,
+    );
   }
 
-  @ApiHeader({ name: 'Authorization', description: 'Bearer <API_KEY>', required: true })
+  @ApiHeader({
+    name: 'Authorization',
+    description: 'Bearer <API_KEY>',
+    required: true,
+  })
   @Post('subscribe')
   @HttpCode(HttpStatus.OK)
   @UseGuards(ApiKeyGuard)
   @UsePipes(new ZodValidationPipe(SubscriptionPaymentSchema))
   @ApiOperation({
     summary: 'Create a subscription checkout session',
-    description: 'Generates a payment URL to register a customer to a recurring pricing plan.',
+    description:
+      'Generates a payment URL to register a customer to a recurring pricing plan.',
   })
   @ApiBody({
     schema: {
@@ -73,8 +112,16 @@ export class CheckoutController {
       required: ['planId', 'email'],
       properties: {
         planId: { type: 'string', example: 'plan_7a8dca9' },
-        email: { type: 'string', format: 'email', example: 'subscriber@test.com' },
-        callbackUrl: { type: 'string', format: 'uri', example: 'https://mywebsite.com/sub-success' },
+        email: {
+          type: 'string',
+          format: 'email',
+          example: 'subscriber@test.com',
+        },
+        callbackUrl: {
+          type: 'string',
+          format: 'uri',
+          example: 'https://mywebsite.com/sub-success',
+        },
       },
     },
   })
@@ -86,7 +133,11 @@ export class CheckoutController {
       properties: {
         sessionId: { type: 'string', example: 'tx_1234567890abcdef' },
         subscriptionId: { type: 'string', example: 'sub_a28deca9' },
-        checkoutUrl: { type: 'string', format: 'uri', example: 'https://checkout.nomba.com/pay/mock_link_123' },
+        checkoutUrl: {
+          type: 'string',
+          format: 'uri',
+          example: 'https://checkout.nomba.com/pay/mock_link_123',
+        },
       },
     },
   })
@@ -94,17 +145,25 @@ export class CheckoutController {
   @ApiResponse({ status: 404, description: 'Plan not found' })
   async createSubscriptionPayment(
     @Body() body: SubscriptionPaymentDto,
-    @Request() req: any,
+    @Request() req: Record<string, unknown>,
   ) {
-    return this.checkoutService.createSubscriptionPayment(req.merchantId, req.environment, body);
+    return this.checkoutService.createSubscriptionPayment(
+      req.merchantId as string,
+      req.environment as 'test' | 'live',
+      body,
+    );
   }
 
   @Get('sessions/:id/status')
   @ApiOperation({
     summary: 'Poll checkout session status',
-    description: 'Enables frontend checkouts or backend applications to poll for session completion status.',
+    description:
+      'Enables frontend checkouts or backend applications to poll for session completion status.',
   })
-  @ApiParam({ name: 'id', description: 'The unique session ID / transaction ID' })
+  @ApiParam({
+    name: 'id',
+    description: 'The unique session ID / transaction ID',
+  })
   @ApiResponse({
     status: 200,
     description: 'Session status retrieved successfully',
@@ -112,10 +171,18 @@ export class CheckoutController {
       type: 'object',
       properties: {
         sessionId: { type: 'string', example: 'tx_1234567890abcdef' },
-        amount: { type: 'number', format: 'float', example: 5000.00 },
-        status: { type: 'string', enum: ['pending', 'success', 'failed'], example: 'pending' },
+        amount: { type: 'number', format: 'float', example: 5000.0 },
+        status: {
+          type: 'string',
+          enum: ['pending', 'success', 'failed'],
+          example: 'pending',
+        },
         nombaRef: { type: 'string', nullable: true, example: 'ref_nomba_992c' },
-        createdAt: { type: 'string', format: 'date-time', example: '2026-07-04T02:00:00.000Z' },
+        createdAt: {
+          type: 'string',
+          format: 'date-time',
+          example: '2026-07-04T02:00:00.000Z',
+        },
       },
     },
   })
@@ -129,7 +196,8 @@ export class CheckoutController {
   @UsePipes(new ZodValidationPipe(PublicPlanSessionSchema))
   @ApiOperation({
     summary: 'Generate public plan checkout session',
-    description: 'Allows off-the-shelf payment links to initialize checkout sessions for customer emails.',
+    description:
+      'Allows off-the-shelf payment links to initialize checkout sessions for customer emails.',
   })
   @ApiParam({ name: 'planId', description: 'The static pricing plan ID' })
   @ApiBody({
@@ -138,7 +206,11 @@ export class CheckoutController {
       required: ['email'],
       properties: {
         email: { type: 'string', format: 'email', example: 'buyer@gmail.com' },
-        callbackUrl: { type: 'string', format: 'uri', example: 'https://mywebsite.com/public-success' },
+        callbackUrl: {
+          type: 'string',
+          format: 'uri',
+          example: 'https://mywebsite.com/public-success',
+        },
       },
     },
   })
@@ -150,7 +222,11 @@ export class CheckoutController {
       properties: {
         sessionId: { type: 'string', example: 'tx_1234567890abcdef' },
         subscriptionId: { type: 'string', example: 'sub_a28deca9' },
-        checkoutUrl: { type: 'string', format: 'uri', example: 'https://checkout.nomba.com/pay/mock_link_123' },
+        checkoutUrl: {
+          type: 'string',
+          format: 'uri',
+          example: 'https://checkout.nomba.com/pay/mock_link_123',
+        },
       },
     },
   })

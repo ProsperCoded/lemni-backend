@@ -25,13 +25,20 @@ export class ProrationService {
     }
 
     // Fraction of the cycle that is remaining and unused
-    const unusedFraction = Math.min(1, Math.max(0, unusedDuration / totalDuration));
-    
+    const unusedFraction = Math.min(
+      1,
+      Math.max(0, unusedDuration / totalDuration),
+    );
+
     // Unused credit rounded to 2 decimal places
-    const unusedCredit = Math.round(currentPlanAmount * unusedFraction * 100) / 100;
-    
+    const unusedCredit =
+      Math.round(currentPlanAmount * unusedFraction * 100) / 100;
+
     // Net charge to pay immediately (cannot be negative)
-    const netCharge = Math.max(0, Math.round((newPlanAmount - unusedCredit) * 100) / 100);
+    const netCharge = Math.max(
+      0,
+      Math.round((newPlanAmount - unusedCredit) * 100) / 100,
+    );
 
     return {
       unusedCredit,

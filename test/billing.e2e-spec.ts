@@ -4,7 +4,12 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { DRIZZLE_PROVIDER } from './../src/database/database.provider';
-import { merchants, plans, customers, subscriptions } from './../src/database/schema';
+import {
+  merchants,
+  plans,
+  customers,
+  subscriptions,
+} from './../src/database/schema';
 import { ProrationService } from './../src/billing/proration.service';
 import { BillingService } from './../src/billing/billing.service';
 import { JwtService } from '@nestjs/jwt';
@@ -45,7 +50,10 @@ describe('Billing & Domain Logic (e2e)', () => {
     await db.insert(merchants).values(testMerchant);
 
     // Generate authenticated JWT token for the merchant
-    jwtToken = jwtService.sign({ sub: testMerchant.id, email: testMerchant.email });
+    jwtToken = jwtService.sign({
+      sub: testMerchant.id,
+      email: testMerchant.email,
+    });
   });
 
   afterAll(async () => {
@@ -154,7 +162,9 @@ describe('Billing & Domain Logic (e2e)', () => {
 
     it('should delete a plan if no active subscriptions are attached (204)', async () => {
       // Delete the active subscription
-      await db.delete(subscriptions).where(eq(subscriptions.id, 'sub-active-test-1'));
+      await db
+        .delete(subscriptions)
+        .where(eq(subscriptions.id, 'sub-active-test-1'));
 
       await request(app.getHttpServer())
         .delete(`/admin/plans/${createdPlanId}`)
@@ -162,7 +172,10 @@ describe('Billing & Domain Logic (e2e)', () => {
         .expect(204);
 
       // Verify deletion in DB
-      const [planRecord] = await db.select().from(plans).where(eq(plans.id, createdPlanId));
+      const [planRecord] = await db
+        .select()
+        .from(plans)
+        .where(eq(plans.id, createdPlanId));
       expect(planRecord).toBeUndefined();
     });
   });
@@ -182,7 +195,9 @@ describe('Billing & Domain Logic (e2e)', () => {
 
       const subscriptionId = 'sub-grace-1';
       // Set currentPeriodEnd to 1 day ago (overdue but within 3 days grace period)
-      const periodEnd = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const periodEnd = new Date(
+        Date.now() - 24 * 60 * 60 * 1000,
+      ).toISOString();
 
       await db.insert(subscriptions).values({
         id: subscriptionId,
@@ -192,7 +207,8 @@ describe('Billing & Domain Logic (e2e)', () => {
         currentPeriodEnd: periodEnd,
       });
 
-      const status = await billingService.evaluateSubscriptionGracePeriod(subscriptionId);
+      const status =
+        await billingService.evaluateSubscriptionGracePeriod(subscriptionId);
       expect(status).toBe('past_due');
     });
 
@@ -209,7 +225,9 @@ describe('Billing & Domain Logic (e2e)', () => {
 
       const subscriptionId = 'sub-grace-2';
       // Set currentPeriodEnd to 4 days ago (grace period limit exceeded)
-      const periodEnd = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+      const periodEnd = new Date(
+        Date.now() - 4 * 24 * 60 * 60 * 1000,
+      ).toISOString();
 
       await db.insert(subscriptions).values({
         id: subscriptionId,
@@ -219,7 +237,8 @@ describe('Billing & Domain Logic (e2e)', () => {
         currentPeriodEnd: periodEnd,
       });
 
-      const status = await billingService.evaluateSubscriptionGracePeriod(subscriptionId);
+      const status =
+        await billingService.evaluateSubscriptionGracePeriod(subscriptionId);
       expect(status).toBe('canceled');
     });
   });
@@ -263,14 +282,20 @@ describe('Billing & Domain Logic (e2e)', () => {
       expect(response.body.currentPeriodEnd).toBeDefined();
 
       // Verify db changes
-      const [subRecord] = await db.select().from(subscriptions).where(eq(subscriptions.id, subscriptionId));
+      const [subRecord] = await db
+        .select()
+        .from(subscriptions)
+        .where(eq(subscriptions.id, subscriptionId));
       expect(subRecord.status).toBe('active');
     });
 
     it('should block reactivation if customer card is not tokenized (403)', async () => {
-      const customerNoCard = await billingService.registerCustomer(testMerchant.id, {
-        email: 'no-card-reactivate@test.com',
-      });
+      const customerNoCard = await billingService.registerCustomer(
+        testMerchant.id,
+        {
+          email: 'no-card-reactivate@test.com',
+        },
+      );
 
       const noCardSubId = 'sub-no-card-reactivate';
       await db.insert(subscriptions).values({

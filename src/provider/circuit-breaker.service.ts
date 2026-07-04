@@ -6,7 +6,7 @@ export type BreakerState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 @Injectable()
 export class CircuitBreakerService {
   private readonly logger = new Logger(CircuitBreakerService.name);
-  
+
   private state: BreakerState = 'CLOSED';
   private failureCount = 0;
   private readonly failureThreshold = 3;
@@ -18,7 +18,10 @@ export class CircuitBreakerService {
 
   getState(): BreakerState {
     // If state is OPEN and cooldown has elapsed, move to HALF_OPEN
-    if (this.state === 'OPEN' && Date.now() - this.lastStateChange > this.cooldownPeriod) {
+    if (
+      this.state === 'OPEN' &&
+      Date.now() - this.lastStateChange > this.cooldownPeriod
+    ) {
       this.transitionTo('HALF_OPEN');
     }
     return this.state;
@@ -37,7 +40,12 @@ export class CircuitBreakerService {
 
   recordFailure() {
     this.failureCount++;
-    this.logger.warn('Consecutive gateway failure count: ' + this.failureCount + '/' + this.failureThreshold);
+    this.logger.warn(
+      'Consecutive gateway failure count: ' +
+        this.failureCount +
+        '/' +
+        this.failureThreshold,
+    );
 
     if (this.state === 'CLOSED' && this.failureCount >= this.failureThreshold) {
       this.transitionTo('OPEN');
@@ -47,7 +55,9 @@ export class CircuitBreakerService {
   }
 
   private transitionTo(newState: BreakerState) {
-    this.logger.warn('Circuit Breaker state transitioning: ' + this.state + ' -> ' + newState);
+    this.logger.warn(
+      'Circuit Breaker state transitioning: ' + this.state + ' -> ' + newState,
+    );
     this.state = newState;
     this.lastStateChange = Date.now();
     this.stateChange$.next({ state: newState });

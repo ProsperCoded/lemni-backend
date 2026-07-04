@@ -81,7 +81,9 @@ describe('Security & Authentication (e2e)', () => {
         .set('Authorization', `Basic ${rawKey}`)
         .expect(401);
 
-      expect(response.body.message).toBe('Invalid authorization scheme. Use Bearer <API_KEY>');
+      expect(response.body.message).toBe(
+        'Invalid authorization scheme. Use Bearer <API_KEY>',
+      );
     });
 
     it('should reject requests with invalid/incorrect key (401)', async () => {
@@ -104,7 +106,10 @@ describe('Security & Authentication (e2e)', () => {
 
     it('should reject requests when API key is marked inactive (401)', async () => {
       // Deactivate key
-      await db.update(apiKeys).set({ isActive: false }).where(eq(apiKeys.id, keyId));
+      await db
+        .update(apiKeys)
+        .set({ isActive: false })
+        .where(eq(apiKeys.id, keyId));
 
       const response = await request(app.getHttpServer())
         .get('/test-api-key')
@@ -114,7 +119,10 @@ describe('Security & Authentication (e2e)', () => {
       expect(response.body.message).toBe('Invalid or inactive API key');
 
       // Reactivate key for subsequent tests
-      await db.update(apiKeys).set({ isActive: true }).where(eq(apiKeys.id, keyId));
+      await db
+        .update(apiKeys)
+        .set({ isActive: true })
+        .where(eq(apiKeys.id, keyId));
     });
   });
 
@@ -140,7 +148,10 @@ describe('Security & Authentication (e2e)', () => {
       });
 
       // Generate a mock JWT for our merchant
-      jwtToken = jwtService.sign({ sub: testMerchant.id, email: testMerchant.email });
+      jwtToken = jwtService.sign({
+        sub: testMerchant.id,
+        email: testMerchant.email,
+      });
     });
 
     it('should reject revocation requests without valid JWT (401)', async () => {
@@ -159,7 +170,10 @@ describe('Security & Authentication (e2e)', () => {
       expect(response.body.message).toBe('API key successfully revoked');
 
       // Verify key is inactive in DB
-      const [keyRecord] = await db.select().from(apiKeys).where(eq(apiKeys.id, keyId));
+      const [keyRecord] = await db
+        .select()
+        .from(apiKeys)
+        .where(eq(apiKeys.id, keyId));
       expect(keyRecord.isActive).toBe(false);
     });
 

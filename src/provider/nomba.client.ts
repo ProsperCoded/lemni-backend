@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CircuitBreakerService } from './circuit-breaker.service';
 
@@ -119,9 +114,9 @@ export class NombaClient {
       });
 
       const responseText = await response.text();
-      let responseData: any;
+      let responseData: Record<string, unknown> | { rawText: string };
       try {
-        responseData = JSON.parse(responseText);
+        responseData = JSON.parse(responseText) as Record<string, unknown>;
       } catch {
         responseData = { rawText: responseText };
       }
@@ -130,7 +125,6 @@ export class NombaClient {
       this.logger.debug(`Response Payload: ${JSON.stringify(responseData)}`);
 
       if (response.status >= 500) {
-        // Record gateway failures
         this.circuitBreakerService.recordFailure();
         throw new HttpException(
           `Payment gateway returned server error: ${response.status}`,
@@ -139,11 +133,11 @@ export class NombaClient {
       }
 
       if (!response.ok) {
-        throw new HttpException(
-          responseData.message ||
-            `Payment gateway request failed: ${response.status}`,
-          response.status,
-        );
+        const message =
+          ((responseData as Record<string, unknown>).message as
+            string | undefined) ||
+          `Payment gateway request failed: ${response.status}`;
+        throw new HttpException(message, response.status);
       }
 
       // Success

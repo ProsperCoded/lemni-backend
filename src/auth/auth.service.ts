@@ -8,9 +8,7 @@ import { eq, and } from 'drizzle-orm';
 
 @Injectable()
 export class AuthService {
-  constructor(
-    @Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB,
-  ) {}
+  constructor(@Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB) {}
 
   /**
    * Generates a cryptographically secure random API key.
@@ -18,7 +16,11 @@ export class AuthService {
    * @param environment 'test' | 'live'
    * @returns { rawKey: string, keyId: string, secretPart: string }
    */
-  generateApiKey(environment: 'test' | 'live'): { rawKey: string; keyId: string; secretPart: string } {
+  generateApiKey(environment: 'test' | 'live'): {
+    rawKey: string;
+    keyId: string;
+    secretPart: string;
+  } {
     const keyId = crypto.randomBytes(8).toString('hex'); // 16 characters id
     const secretPart = crypto.randomBytes(24).toString('hex'); // 48 characters secret
     const rawKey = `sk_${environment}_${keyId}_${secretPart}`;
@@ -38,7 +40,9 @@ export class AuthService {
    * @param rawKey The raw API key from authorization header
    * @returns The associated API key record with merchant context if valid, null otherwise
    */
-  async validateApiKey(rawKey: string): Promise<{ merchantId: string; environment: 'test' | 'live' } | null> {
+  async validateApiKey(
+    rawKey: string,
+  ): Promise<{ merchantId: string; environment: 'test' | 'live' } | null> {
     const parts = rawKey.split('_');
     if (parts.length !== 4 || parts[0] !== 'sk') {
       return null;
@@ -71,7 +75,7 @@ export class AuthService {
 
     return {
       merchantId: record.merchantId,
-      environment: record.environment as 'test' | 'live',
+      environment: record.environment,
     };
   }
 
