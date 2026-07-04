@@ -1,14 +1,20 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, ConflictException, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
-import { apiKeys } from '../database/schema';
+import { apiKeys, merchants } from '../database/schema';
 import { eq, and } from 'drizzle-orm';
 
 @Injectable()
 export class AuthService {
-  constructor(@Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB,
+    private readonly configService: ConfigService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   /**
    * Generates a cryptographically secure random API key.
@@ -89,5 +95,134 @@ export class AuthService {
       .where(and(eq(apiKeys.id, keyId), eq(apiKeys.merchantId, merchantId)))
       .returning();
     return result.length > 0;
+  }
+
+  /**
+   * Register a new merchant account
+   */
+  async signup(
+    email: string,
+    password: string,
+    name: string,
+  ): Promise<{ id: string; email: string; name: string }> {
+    if (!password || password.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters');
+    }
+
+    const existing = await this.db
+      .select()
+      .from(merchants)
+      .where(eq(merchants.email, email));
+
+    if (existing.length > 0) {
+      throw new ConflictException('Email already registered');
+    }
+
+    const merchantId = crypto.randomUUID();
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await this.db.insert(merchants).values({
+      id: merchantId,
+      email,
+      name,
+      hashedPassword,
+    });
+
+    return { id: merchantId, email, name };
+  }
+
+  /**
+   * Authenticate merchant and return JWT tokens
+   */
+  async login(
+    email: string,
+    password: string,
+  ): Promise<{ accessToken: string; refreshToken: string; merchant: { id: string; email: string; name: string } }> {
+    const result = await this.db
+      .select()
+      .from(merchants)
+      .where(eq(merchants.email, email));
+
+    const merchant = result[0];
+    if (!merchant || !merchant.hashedPassword) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, merchant.hashedPassword);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const payload = { sub: merchant.id, email: merchant.email };
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: '1h',
+    });
+
+    const refreshToken = this.jwtService.sign(payload, {
+      expiresIn: '7d',
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+      merchant: { id: merchant.id, email: merchant.email, name: merchant.name },
+    };
+  }
+
+  /**
+   * Refresh access token using refresh token
+   */
+  async refreshAccessToken(refreshToken: string): Promise<{ accessToken: string }> {
+    try {
+      const payload = this.jwtService.verify(refreshToken);
+      const accessToken = this.jwtService.sign(
+        { sub: payload.sub, email: payload.email },
+        { expiresIn: '1h' },
+      );
+      return { accessToken };
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+  }
+
+  /**
+   * List all API keys for a merchant (hides hashed keys, only shows keyId prefix)
+   */
+  async listApiKeys(merchantId: string): Promise<Array<{ id: string; environment: string; isActive: boolean; createdAt: string | null }>> {
+    const keys = await this.db
+      .select({
+        id: apiKeys.id,
+        environment: apiKeys.environment,
+        isActive: apiKeys.isActive,
+        createdAt: apiKeys.createdAt,
+      })
+      .from(apiKeys)
+      .where(eq(apiKeys.merchantId, merchantId));
+
+    return keys;
+  }
+
+  /**
+   * Create and store a new API key, returning the unhashed key only once
+   */
+  async createApiKey(
+    merchantId: string,
+    environment: 'test' | 'live',
+  ): Promise<{ rawKey: string; keyId: string; message: string }> {
+    const { rawKey, keyId, secretPart } = this.generateApiKey(environment);
+    const hashedSecret = await this.hashSecret(secretPart);
+
+    await this.db.insert(apiKeys).values({
+      id: keyId,
+      merchantId,
+      hashedKey: hashedSecret,
+      environment,
+    });
+
+    return {
+      rawKey,
+      keyId,
+      message: 'Store this key safely. You will not be able to see it again.',
+    };
   }
 }

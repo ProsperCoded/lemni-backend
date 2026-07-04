@@ -13,6 +13,7 @@ import type { DrizzleDB } from '../database/database.provider';
 import { subscriptions, customers, plans, dlqJobs } from '../database/schema';
 import { NombaClient } from '../provider/nomba.client';
 import { CircuitBreakerService } from '../provider/circuit-breaker.service';
+import { computeNextPeriodEnd } from '../billing/billing-period.util';
 import type { ChargeJobPayload } from './scheduler.constants';
 import {
   CHARGE_QUEUE,
@@ -150,7 +151,7 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
         where: eq(plans.id, job.data.planId),
       });
       if (plan) {
-        const nextPeriodEnd = this.computeNextPeriodEnd(plan.interval);
+        const nextPeriodEnd = computeNextPeriodEnd(plan.interval);
         await this.db
           .update(subscriptions)
           .set({ status: 'active', currentPeriodEnd: nextPeriodEnd })
@@ -249,7 +250,7 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
       );
 
       this.circuitBreaker.recordSuccess();
-      const nextPeriodEnd = this.computeNextPeriodEnd(plan.interval);
+      const nextPeriodEnd = computeNextPeriodEnd(plan.interval);
       await this.db
         .update(subscriptions)
         .set({ status: 'active', currentPeriodEnd: nextPeriodEnd })
@@ -391,20 +392,5 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
       );
     }
     return false;
-  }
-
-  private computeNextPeriodEnd(interval: string | null): string {
-    const now = new Date();
-    switch (interval) {
-      case 'weekly':
-        now.setDate(now.getDate() + 7);
-        break;
-      case 'yearly':
-        now.setFullYear(now.getFullYear() + 1);
-        break;
-      default:
-        now.setMonth(now.getMonth() + 1); // monthly
-    }
-    return now.toISOString();
   }
 }

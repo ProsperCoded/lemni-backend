@@ -4,7 +4,8 @@ import { sql } from 'drizzle-orm';
 export const merchants = sqliteTable('merchants', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
-  email: text('email').notNull(),
+  email: text('email').notNull().unique(),
+  hashedPassword: text('hashed_password'),
   webhookUrl: text('webhook_url'),
   telegramChatId: text('telegram_chat_id'),
   defaultRedirectUrl: text('default_redirect_url'),

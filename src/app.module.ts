@@ -9,6 +9,7 @@ import { ProviderModule } from './provider/provider.module';
 import { BillingModule } from './billing/billing.module';
 import { CheckoutModule } from './checkout/checkout.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
+import { WebhookModule } from './webhook/webhook.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { SchedulerModule } from './scheduler/scheduler.module';
     BillingModule,
     CheckoutModule,
     SchedulerModule,
+    WebhookModule,
   ],
   controllers: [AppController],
   providers: [AppService],

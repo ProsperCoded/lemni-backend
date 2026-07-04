@@ -67,12 +67,12 @@ This document outlines the sequential, step-by-step implementation tasks for the
     - Nomba `5xx` or network timeout → classify as **retryable** failure; re-enqueue with exponential backoff without immediately marking the subscription as `past_due`.
     - Nomba auth token expired → transparently refresh the Nomba access token by requesting a new one and retry once before surfacing the error.
     - Checkout link generation fails (Nomba 4xx on `POST /v1/checkout/order`) → return `502 Bad Gateway` to the caller; do NOT create a `Transaction` record.
-- [ ] **3.2. Idempotent Transaction Pattern**
+- [x] **3.2. Idempotent Transaction Pattern**
   - Implement idempotency checks leveraging the `Transaction` table directly. Use `transaction.id` as the unique reference and idempotency key when communicating with Nomba.
   - Store the request payload and payment response metadata in the `payload` and `response` columns of the corresponding `Transaction` record.
   - **Unhappy paths:**
     - Duplicate charge attempt / duplicate BullMQ job delivery → check if the `Transaction` status is already `success` or `failed`. If so, skip the attempt and return the cached transaction details.
-    - Container crash mid-request → on reboot, scan `pending` transactions and query Nomba's transaction status endpoint using `transaction.id` to reconcile state before deciding to retry.
+    - Container crash mid-request → on reboot, query the local `Transaction` table directly for `pending` rows and resolve state from there before deciding to retry (no external Nomba status reconciliation call).
 - [x] **3.3. Circuit Breaker Pattern**
   - Implement a circuit breaker mechanism that monitors Nomba API failures (5xx responses).
   - If failure threshold is reached, trip the breaker and broadcast a signal to `SchedulerModule` to halt active worker queues.
@@ -142,13 +142,13 @@ This document outlines the sequential, step-by-step implementation tasks for the
 ---
 
 ## 6. ASYNCHRONOUS SCHEDULING (SchedulerModule)
-- [ ] **6.1. Redis & BullMQ Integration**
+- [x] **6.1. Redis & BullMQ Integration**
   - Establish connection configurations to Upstash Redis.
   - Initialize the Redis client and BullMQ dashboard/module in NestJS.
   - **Unhappy paths:**
     - Redis connection lost at startup → crash-fast with a descriptive error; do NOT start the NestJS app without a working queue.
     - Redis connection drops mid-operation → BullMQ handles reconnect internally; log the disconnect event and alert via Telegram if downtime exceeds 5 minutes.
-- [ ] **6.2. BillingWorker (Hourly Cron)**
+- [x] **6.2. BillingWorker (Hourly Cron)**
   - Implement worker querying Turso hourly for subscriptions where:
     - Status is `active` and `next_billing_date <= NOW()` (process charge)
     - Status is `trialing` and `trial_end <= NOW()` (promote to active, or transition to canceled/past_due based on card presence and `trial_require_card`)
@@ -157,7 +157,7 @@ This document outlines the sequential, step-by-step implementation tasks for the
     - Turso DB query fails (connection error) → log error, skip the cron cycle, do NOT push partial job batches; retry on the next hourly tick.
     - Subscription's `nomba_token` is null when charge is attempted → skip charge, set status to `past_due`, dispatch `token_missing` webhook to merchant.
     - Large batch of subscriptions due simultaneously → use cursor-based pagination when querying to avoid memory spikes; push jobs in batches.
-- [ ] **6.3. DunningWorker (Failure Retries & Queue)**
+- [x] **6.3. DunningWorker (Failure Retries & Queue)**
   - Implement queue worker executing failed charge attempts.
   - Implement exponential backoff or WAT 9:00 AM heuristic retry scheduling.
   - Cancel subscription if retries fail after `grace_period_days` limit is reached, then drop jobs into Dead Letter Queue (DLQ).
@@ -165,13 +165,13 @@ This document outlines the sequential, step-by-step implementation tasks for the
     - Max retries hit while circuit breaker is open (Nomba outage) → do NOT cancel the subscription; instead, hold in `past_due` until circuit closes, then resume dunning from current retry count.
     - DunningWorker crashes mid-retry → BullMQ job remains in active state; on worker restart the job is re-attempted; idempotency key prevents double-charge.
     - Subscription is manually reactivated by merchant while a dunning job is queued → worker must check current subscription status before attempting charge and discard the stale job if status is no longer `past_due`.
-- [ ] **6.4. HealthCron & Queue Management**
+- [x] **6.4. HealthCron & Queue Management**
   - Regularly ping Nomba health endpoint.
   - Pause the `ChargeQueue` if Nomba returns error states (circuit breaker tripped) and resume when online.
   - **Unhappy paths:**
     - HealthCron itself fails to run (Render sleep, crash) → Keep-Alive ping will restart the service; circuit breaker in ProviderModule provides redundant protection.
     - Nomba health endpoint returns degraded (2xx but with partial outage body) → treat as operational; monitor for 5xx before tripping breaker.
-- [ ] **6.5. Dead Letter Queue (DLQ) Management**
+- [x] **6.5. Dead Letter Queue (DLQ) Management**
   - Persist all DLQ jobs with their full payload, error reason, subscription ID, and retry history.
   - Expose an admin endpoint `GET /admin/dlq` for merchants to inspect dead jobs.
   - Expose `POST /admin/dlq/:jobId/replay` to allow manual re-trigger of a dead job after the underlying issue is resolved.
@@ -179,7 +179,7 @@ This document outlines the sequential, step-by-step implementation tasks for the
 ---
 
 ## 7. WEBHOOKS & NOTIFICATIONS (WebhookModule)
-- [ ] **7.1. Inbound Webhook Handler (`POST /api/v1/webhooks/nomba`)**
+- [x] **7.1. Inbound Webhook Handler (`POST /api/v1/webhooks/nomba`)**
   - Implement webhook receiver to verify Nomba signature headers.
   - Match webhook event payload (success/failed payment) to the corresponding `Transaction` and update state.
   - Update `Subscription` status (e.g. roll forward `next_billing_date` on success).

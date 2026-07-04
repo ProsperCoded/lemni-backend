@@ -69,8 +69,7 @@ export class SchedulerModule implements OnModuleInit {
       );
       process.exit(1);
     } finally {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      void probe.disconnect().catch(() => {});
+      probe.disconnect();
     }
   }
 }

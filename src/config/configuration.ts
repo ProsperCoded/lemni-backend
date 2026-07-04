@@ -11,6 +11,7 @@ export const EnvironmentSchema = z.object({
   NOMBA_LIVE_CLIENT_SECRET: z.string(),
   NOMBA_TEST_CLIENT_ID: z.string(),
   NOMBA_TEST_CLIENT_SECRET: z.string(),
+  NOMBA_WEBHOOK_SECRET: z.string(),
   REDIS_URL: z.string().url(),
   API_KEY_SALT_OR_ROUNDS: z.coerce.number().default(10),
   JWT_SECRET: z.string(),
