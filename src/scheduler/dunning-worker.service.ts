@@ -20,6 +20,7 @@ import {
   DUNNING_QUEUE,
   DUNNING_QUEUE_TOKEN,
 } from './scheduler.constants';
+import type { NotificationJobPayload } from '../notification/dto/notification.dto';
 
 /**
  * Exponential backoff delays in milliseconds for dunning retries.
@@ -42,6 +43,8 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
     @Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB,
     @Inject(DUNNING_QUEUE_TOKEN)
     private readonly dunningQueue: Queue<ChargeJobPayload>,
+    @Inject('NOTIFICATION_QUEUE')
+    private readonly notificationQueue: Queue<NotificationJobPayload>,
     private readonly configService: ConfigService,
     private readonly nombaClient: NombaClient,
     private readonly circuitBreaker: CircuitBreakerService,
@@ -318,6 +321,16 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
       .update(subscriptions)
       .set({ status: 'canceled' })
       .where(eq(subscriptions.id, payload.subscriptionId));
+
+    await this.notificationQueue.add('notification', {
+      merchantId: payload.merchantId,
+      eventType: 'grace_period_exhausted',
+      subscriptionId: payload.subscriptionId,
+      customerId: payload.customerId,
+      reason,
+      timestamp: new Date().toISOString(),
+    });
+
     await this.sendToDlq(payload, reason);
   }
 

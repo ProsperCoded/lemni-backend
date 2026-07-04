@@ -1,16 +1,22 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
+import { Queue } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
-import { transactions, subscriptions, plans } from '../database/schema';
+import { transactions, subscriptions, plans, merchants } from '../database/schema';
 import { computeNextPeriodEnd } from '../billing/billing-period.util';
 import type { NombaWebhookEventDto } from './dto/webhook.dto';
+import type { NotificationJobPayload } from '../notification/dto/notification.dto';
 
 @Injectable()
 export class WebhookService {
   private readonly logger = new Logger(WebhookService.name);
 
-  constructor(@Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB,
+    @Inject('NOTIFICATION_QUEUE')
+    private readonly notificationQueue: Queue<NotificationJobPayload>,
+  ) {}
 
   async processNombaEvent(
     event: NombaWebhookEventDto,
@@ -48,7 +54,30 @@ export class WebhookService {
         .where(eq(transactions.id, tx.id));
 
       if (tx.subscriptionId) {
-        await this.advanceSubscription(tx.subscriptionId);
+        const sub = await this.db.query.subscriptions.findFirst({
+          where: eq(subscriptions.id, tx.subscriptionId),
+        });
+
+        if (sub) {
+          const [merchant] = await this.db.query.merchants.findFirst({
+            where: eq(merchants.id, sub.customerId),
+          });
+
+          const plan = await this.db.query.plans.findFirst({
+            where: eq(plans.id, sub.planId),
+          });
+
+          await this.advanceSubscription(tx.subscriptionId);
+
+          await this.notificationQueue.add('notification', {
+            merchantId: plan?.merchantId || 'unknown',
+            eventType: 'payment_success',
+            subscriptionId: tx.subscriptionId,
+            transactionId: tx.id,
+            amount: tx.amount || 0,
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
       return { status: 'processed' };
     }
@@ -58,6 +87,27 @@ export class WebhookService {
         .update(transactions)
         .set({ status: 'failed', response: JSON.stringify(event) })
         .where(eq(transactions.id, tx.id));
+
+      if (tx.subscriptionId) {
+        const sub = await this.db.query.subscriptions.findFirst({
+          where: eq(subscriptions.id, tx.subscriptionId),
+        });
+
+        if (sub) {
+          const plan = await this.db.query.plans.findFirst({
+            where: eq(plans.id, sub.planId),
+          });
+
+          await this.notificationQueue.add('notification', {
+            merchantId: plan?.merchantId || 'unknown',
+            eventType: 'payment_failed',
+            subscriptionId: tx.subscriptionId,
+            transactionId: tx.id,
+            reason: 'webhook_reported_failure',
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
       return { status: 'processed' };
     }
 

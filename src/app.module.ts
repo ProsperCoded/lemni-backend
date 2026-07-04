@@ -10,6 +10,7 @@ import { BillingModule } from './billing/billing.module';
 import { CheckoutModule } from './checkout/checkout.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { WebhookModule } from './webhook/webhook.module';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { WebhookModule } from './webhook/webhook.module';
     CheckoutModule,
     SchedulerModule,
     WebhookModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

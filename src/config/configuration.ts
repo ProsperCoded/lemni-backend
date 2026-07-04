@@ -16,7 +16,8 @@ export const EnvironmentSchema = z.object({
   API_KEY_SALT_OR_ROUNDS: z.coerce.number().default(10),
   JWT_SECRET: z.string(),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
-  TELEGRAM_CHAT_ID: z.string().optional(),
+  TELEGRAM_BOT_USERNAME: z.string().optional(),
+  TELEGRAM_BOT_SECRET: z.string().optional(),
 });
 
 export type Environment = z.infer<typeof EnvironmentSchema>;
