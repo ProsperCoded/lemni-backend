@@ -701,6 +701,45 @@ paths:
       summary: Create a subscription checkout session
       tags:
         - developer-apis/checkout
+  /auth/forgot-password:
+    post:
+      description: >-
+        Initiates the password reset flow. If the email is registered, a password reset token is generated and returned
+        (for testing/development purposes, and logged).
+      operationId: AuthController_forgotPassword
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                email:
+                  description: The email address associated with the merchant account
+                  example: acme@example.com
+                  format: email
+                  type: string
+              required:
+                - email
+              type: object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    example: If the email exists, a password reset token has been generated.
+                    type: string
+                  token:
+                    description: Password reset token (returned in development/testing mode)
+                    example: a6e3b52d...
+                    type: string
+                type: object
+          description: Reset request processed
+      summary: Request a password reset token
+      tags:
+        - merchant-dashboard/auth
   /auth/login:
     post:
       description: >-
@@ -820,6 +859,47 @@ paths:
         '401':
           description: Invalid or expired refresh token
       summary: Refresh access token using refresh token
+      tags:
+        - merchant-dashboard/auth
+  /auth/reset-password:
+    post:
+      description: Resets the password of the merchant account associated with the provided token.
+      operationId: AuthController_resetPassword
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                password:
+                  description: The new password (minimum 8 characters)
+                  example: NewSecurePassword123
+                  format: password
+                  minLength: 8
+                  type: string
+                token:
+                  description: A valid, unexpired password reset token
+                  example: a6e3b52d...
+                  type: string
+              required:
+                - token
+                - password
+              type: object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  success:
+                    example: true
+                    type: boolean
+                type: object
+          description: Password successfully reset
+        '400':
+          description: Invalid token, expired token, or weak password
+      summary: Reset password using token
       tags:
         - merchant-dashboard/auth
   /auth/signup:

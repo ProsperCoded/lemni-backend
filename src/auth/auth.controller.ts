@@ -202,6 +202,54 @@ export class AuthController {
   async logout() {
     return { message: 'Successfully logged out. Please discard tokens.' };
   }
+
+  @Post('reset-password')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Reset password using old password verification',
+    description: 'Resets the password of the merchant account verifying their current old password.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['email', 'oldPassword', 'newPassword'],
+      properties: {
+        email: {
+          type: 'string',
+          format: 'email',
+          example: 'acme@example.com',
+          description: 'The email address associated with the merchant account',
+        },
+        oldPassword: {
+          type: 'string',
+          format: 'password',
+          example: 'SecurePassword123',
+          description: 'The current password',
+        },
+        newPassword: {
+          type: 'string',
+          format: 'password',
+          example: 'NewSecurePassword123',
+          minLength: 8,
+          description: 'The new password (minimum 8 characters)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Password successfully reset',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid email, incorrect old password, or weak new password' })
+  async resetPassword(@Body() body: { email: string; oldPassword: string; newPassword: string }) {
+    return this.authService.resetPassword(body.email, body.oldPassword, body.newPassword);
+  }
 }
 
 @ApiTags('merchant-dashboard/api-keys')

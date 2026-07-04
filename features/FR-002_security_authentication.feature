@@ -23,3 +23,8 @@ Feature: FR-002 Security & Authentication
     And a JWT token generated upon login
     When the JwtAuthGuard validates the token
     Then only authenticated merchants with valid sessions should be allowed access
+
+  Scenario: Complete Password Reset with Old Password Verification
+    Given a merchant has registered with email "admin@example.com" and password "OldSecurePassword123"
+    When they POST to "/auth/reset-password" with email "admin@example.com", oldPassword "OldSecurePassword123", and newPassword "NewSecurePassword123"
+    Then the password is successfully updated in the database

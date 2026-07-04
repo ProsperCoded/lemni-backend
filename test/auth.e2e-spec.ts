@@ -8,8 +8,11 @@ import { merchants, apiKeys } from './../src/database/schema';
 import { AuthService } from './../src/auth/auth.service';
 import { JwtService } from '@nestjs/jwt';
 import { eq } from 'drizzle-orm';
+import * as bcrypt from 'bcryptjs';
 
 describe('Security & Authentication (e2e)', () => {
+  jest.setTimeout(30000);
+
   let app: INestApplication<App>;
   let db: any;
   let authService: AuthService;
@@ -20,6 +23,8 @@ describe('Security & Authentication (e2e)', () => {
     name: 'Test Merchant',
     email: 'test@merchant.com',
   };
+
+  const rawDefaultPassword = 'OldSecurePassword123';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -36,7 +41,12 @@ describe('Security & Authentication (e2e)', () => {
     // Clean tables and seed test merchant
     await db.delete(apiKeys);
     await db.delete(merchants);
-    await db.insert(merchants).values(testMerchant);
+
+    const hashed = await bcrypt.hash(rawDefaultPassword, 10);
+    await db.insert(merchants).values({
+      ...testMerchant,
+      hashedPassword: hashed,
+    });
   });
 
   afterAll(async () => {
@@ -184,6 +194,71 @@ describe('Security & Authentication (e2e)', () => {
         .expect(401);
 
       expect(response.body.message).toBe('Invalid or inactive API key');
+    });
+  });
+
+  describe('Password Reset Flow', () => {
+    it('should reset password successfully with valid old password and new password', async () => {
+      // Perform reset
+      await request(app.getHttpServer())
+        .post('/auth/reset-password')
+        .send({
+          email: testMerchant.email,
+          oldPassword: rawDefaultPassword,
+          newPassword: 'NewSecurePassword123',
+        })
+        .expect(200);
+
+      // Verify log in works with new password
+      const loginResponse = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: testMerchant.email, password: 'NewSecurePassword123' })
+        .expect(200);
+
+      expect(loginResponse.body.accessToken).toBeDefined();
+
+      // Reset it back to default for other tests
+      await request(app.getHttpServer())
+        .post('/auth/reset-password')
+        .send({
+          email: testMerchant.email,
+          oldPassword: 'NewSecurePassword123',
+          newPassword: rawDefaultPassword,
+        })
+        .expect(200);
+    });
+
+    it('should reject reset with incorrect old password (400)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/reset-password')
+        .send({
+          email: testMerchant.email,
+          oldPassword: 'wrong_old_password',
+          newPassword: 'NewSecurePassword123',
+        })
+        .expect(400);
+    });
+
+    it('should reject reset with nonexistent email (400)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/reset-password')
+        .send({
+          email: 'nonexistent@merchant.com',
+          oldPassword: rawDefaultPassword,
+          newPassword: 'NewSecurePassword123',
+        })
+        .expect(400);
+    });
+
+    it('should reject reset with weak new password (400)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/reset-password')
+        .send({
+          email: testMerchant.email,
+          oldPassword: rawDefaultPassword,
+          newPassword: 'short',
+        })
+        .expect(400);
     });
   });
 });

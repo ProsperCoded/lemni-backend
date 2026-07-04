@@ -1,4 +1,4 @@
-import { Injectable, Inject, ConflictException, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, ConflictException, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -10,6 +10,8 @@ import { eq, and } from 'drizzle-orm';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB,
     private readonly configService: ConfigService,
@@ -224,5 +226,44 @@ export class AuthService {
       keyId,
       message: 'Store this key safely. You will not be able to see it again.',
     };
+  }
+
+  /**
+   * Reset password verifying old password.
+   */
+  async resetPassword(email: string, oldPassword: string, newPassword: string): Promise<{ success: boolean }> {
+    if (!newPassword || newPassword.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters');
+    }
+
+    const result = await this.db
+      .select()
+      .from(merchants)
+      .where(eq(merchants.email, email));
+
+    const merchant = result[0];
+    if (!merchant || !merchant.hashedPassword) {
+      this.logger.warn(`Password reset attempt with invalid email: ${email}`);
+      throw new BadRequestException('Invalid email or password');
+    }
+
+    const isMatch = await bcrypt.compare(oldPassword, merchant.hashedPassword);
+    if (!isMatch) {
+      this.logger.warn(`Password reset attempt with incorrect old password for: ${email}`);
+      throw new BadRequestException('Invalid email or password');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.db
+      .update(merchants)
+      .set({
+        hashedPassword,
+      })
+      .where(eq(merchants.id, merchant.id));
+
+    this.logger.log(`Password successfully reset for merchant: ${email}`);
+
+    return { success: true };
   }
 }

@@ -43,6 +43,20 @@
       "when": 1783134494472,
       "tag": "0005_add_merchant_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1783155762386,
+      "tag": "0006_red_old_lace",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1783156288568,
+      "tag": "0007_classy_dexter_bennett",
+      "breakpoints": true
     }
   ]
 }

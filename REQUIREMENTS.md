@@ -47,6 +47,12 @@ This document outlines the sequential, step-by-step implementation tasks for the
 - [x] **2.4. API Key Revocation Endpoint**
   - Implement `DELETE /admin/api-keys/:id` to set `is_active = false` for a given key.
   - Ensure in-flight requests with that key are rejected by the guard immediately (stateless check on every request).
+- [x] **2.5. Password Reset Flow**
+  - Implement `POST /auth/reset-password` to reset password by verifying old password.
+  - **Unhappy paths:**
+    - Request reset for non-existent or invalid email → Return `400 Bad Request` with `Invalid email or password`.
+    - Incorrect old password → Return `400 Bad Request` with `Invalid email or password`.
+    - New password too short (less than 8 characters) → Return `400 Bad Request`.
 
 ---
 
@@ -268,20 +274,28 @@ This document outlines the sequential, step-by-step implementation tasks for the
     - Webhook payload references a `nomba_ref` that does not match any local `Transaction` → log as `orphaned_webhook`, return `200 OK` to Nomba to prevent retries, alert merchant.
     - Webhook received for a `Transaction` already in terminal state (`success` or `failed`) → deduplicate silently; return `200 OK`; do NOT re-process.
     - Nomba sends a `payment.pending` event followed later by `payment.success` → ensure state machine only advances forward (pending → success); reject backward transitions.
-- [ ] **7.2. Outbound Webhook Dispatcher**
-  - Build dispatch queue to send signed webhook payloads to the merchant's `webhook_url`.
-  - Handle retries with backoff for merchant webhook endpoints that fail.
-  - **Unhappy paths:**
-    - Merchant `webhook_url` returns non-2xx on first attempt → re-enqueue with exponential backoff (3 retries: 1 min, 5 min, 30 min).
-    - All retries exhausted → mark dispatch as `permanently_failed`; log to DB with full payload; surface in merchant dashboard as a missed event.
-    - Merchant `webhook_url` is not configured → skip dispatch silently; still deliver Telegram alerts if configured.
-    - Merchant webhook endpoint is unreachable (DNS failure, timeout) → treat as non-2xx and apply same retry logic.
-- [ ] **7.3. Merchant Notification Service (Telegram)**
-  - Implement Telegram Bot API integration to send alert notifications to the merchant's configured `telegram_chat_id`.
-  - **Unhappy paths:**
-    - Telegram chat ID is invalid or bot is blocked → log the failure; do NOT crash the webhook dispatch flow; mark notification as `undelivered`.
-    - Telegram API is unavailable → log the notification as `undelivered`; surface in merchant dashboard.
-    - Notification service is slow → dispatch notifications asynchronously via a separate BullMQ queue (`NotificationQueue`) so they never block the critical billing path.
+- [ ] **7.2. Merchant Notification Service (Telegram)**
+  - **Part A: Easy Telegram Connection Flow**
+    - Merchant dashboard displays "🤖 Connect Telegram" button that links to Telegram deep link: `https://t.me/bot_username?start=merchant_<id>`
+    - When merchant taps the link and types `/start`, the bot receives the merchant ID
+    - Bot calls Lemni API endpoint `POST /api/v1/admin/telegram/connect` with merchant_id and chat_id (with HMAC signature)
+    - Lemni verifies the signature, stores chat_id in `merchants.telegram_chat_id`, and sends confirmation
+    - Merchant sees dashboard update: "✅ Telegram Connected"
+    - Merchant can also disconnect via `DELETE /api/v1/admin/telegram/disconnect` endpoint
+    - **Endpoints Required:**
+      - `POST /api/v1/admin/telegram/connect` — Bot calls this to save chat_id (signature-verified)
+      - `DELETE /api/v1/admin/telegram/disconnect` — Merchant calls to disconnect (JWT-protected)
+      - `GET /api/v1/admin/telegram/status` — Check connection status (JWT-protected)
+  
+  - **Part B: Async Notification Dispatch**
+    - Implement Telegram Bot API integration to send alert notifications to the merchant's configured `telegram_chat_id`.
+    - Dispatch notifications asynchronously via a separate BullMQ queue (`NotificationQueue`) so they never block the critical billing path.
+    - **Alert Triggers:** Send notifications on key payment events (payment_success, payment_failed, trial_ended, grace_period_exhausted, subscription_canceled, dunning_failed).
+    - **Unhappy paths:**
+      - Telegram chat ID is invalid or bot is blocked → log the failure; do NOT crash the critical billing path; mark notification as `undelivered`.
+      - Telegram API is unavailable → log the notification as `undelivered`; will retry on next queue tick.
+      - Notification queue is slow or backed up → notifications may be delayed, but never block transaction processing.
+      - Merchant has no `telegram_chat_id` configured → skip notification silently (optional integration).
 
 ---
 
@@ -300,4 +314,4 @@ This document outlines the sequential, step-by-step implementation tasks for the
     - Trial expiry flow: with card and without card.
     - Dunning retry execution loop through to DLQ.
     - Inbound webhook signature verification (valid and invalid).
-    - Outbound webhook retry exhaustion.
+    - Telegram notification dispatch (valid chat ID, invalid chat ID, API unavailable).
