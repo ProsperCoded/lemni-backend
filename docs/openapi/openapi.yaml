@@ -928,6 +928,10 @@ paths:
                   name:
                     example: Acme Corporation
                     type: string
+                  username:
+                    description: Unique username for Telegram and public references
+                    example: acme-corporation
+                    type: string
                 type: object
           description: Merchant successfully registered
         '400':
@@ -940,8 +944,8 @@ paths:
   /auth/telegram-link:
     get:
       description: >-
-        Returns a clickable Telegram link that opens the bot with merchant ID pre-filled. Merchant just needs to click
-        and the Telegram app opens with /start merchant_id ready to send.
+        Returns a clickable Telegram link that opens the bot with merchant username pre-filled. Merchant just needs to click
+        and the Telegram app opens with /start merchant_username ready to send.
       operationId: AuthController_getTelegramLink
       parameters: []
       responses:
@@ -951,14 +955,14 @@ paths:
               schema:
                 properties:
                   telegramUrl:
-                    description: Click this link to open Telegram with merchant ID auto-filled
-                    example: https://t.me/lemni_bot?start=550e8400-e29b-41d4-a716-446655440000
+                    description: Click this link to open Telegram with merchant username auto-filled
+                    example: https://t.me/lemni_bot?start=acme-corp
                     format: uri
                     type: string
                 type: object
           description: Telegram link generated successfully
         '400':
-          description: Telegram bot not configured
+          description: Telegram bot not configured or merchant not found
         '401':
           description: Missing or invalid access token
       security:
