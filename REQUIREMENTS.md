@@ -5,14 +5,14 @@ This document outlines the sequential, step-by-step implementation tasks for the
 ---
 
 ## 1. FOUNDATIONAL INFRASTRUCTURE & DATABASE CONFIGURATION
-- [ ] **1.1. Environment Configuration & NestJS Configuration Setup**
-  - Define all required environment variables in a `.env.example` file (including Turso/libSQL credentials, Nomba credentials, Upstash Redis URL, API Key hash salt, Telegram/WhatsApp configurations).
+- [x] **1.1. Environment Configuration & NestJS Configuration Setup**
+  - Define all required environment variables in a `.env.example` file (including Turso/libSQL credentials, Nomba credentials, Upstash Redis URL, API Key hash salt, Telegram Bot Token and Chat ID configurations).
   - Setup NestJS `ConfigModule` and a strongly-typed configuration service.
-- [ ] **1.2. Database & Drizzle Setup with Turso/libSQL**
+- [x] **1.2. Database & Drizzle Setup with Turso/libSQL**
   - Use Drizzle ORM dependencies (`drizzle-orm`, `@libsql/client`) and dev dependencies (`drizzle-kit`).
   - Configure Drizzle provider module in NestJS to establish connection to the Turso database using the `@libsql/client`.
   - Configure `drizzle.config.ts` specifying the Turso database URL, authToken, and schema paths.
-- [ ] **1.3. Database Schema Implementation**
+- [x] **1.3. Database Schema Implementation**
   - Implement Drizzle schema definitions (`drizzle-orm/sqlite-core` or specific libSQL features) reflecting the relational design:
     - `merchants` (id, name, email, webhook_url, telegram_chat_id)
     - `api_keys` (id, merchant_id, hashed_key, environment [test/live], is_active)
@@ -20,7 +20,7 @@ This document outlines the sequential, step-by-step implementation tasks for the
     - `plans` (id, merchant_id, name, amount, billing_model [recurring/one_time/custom_input], interval [weekly/monthly/yearly/null], trial_days, trial_require_card [boolean], grace_period_days [integer])
     - `subscriptions` (id, customer_id, plan_id, status [trialing, active, past_due, canceled], current_period_end, trial_end)
     - `transactions` (id, subscription_id, amount, status [pending, success, failed], nomba_ref)
-- [ ] **1.4. Initial Database Migration**
+- [x] **1.4. Initial Database Migration**
   - Generate the initial schema migration using Drizzle Kit (`pnpm drizzle-kit generate` or `pnpm drizzle-kit push` for testing, but prefer generating migrations to follow agent rules).
   - Apply the migration using Drizzle Kit CLI or database driver migration runner (`pnpm drizzle-kit migrate`).
 
@@ -33,9 +33,20 @@ This document outlines the sequential, step-by-step implementation tasks for the
 - [ ] **2.2. API Key Authentication Guard**
   - Implement `ApiKeyGuard` validating the `Authorization: Bearer <API_KEY>` header against hashed database records.
   - Enforce check for the `environment` (test/live) and `is_active` status of the key.
+  - **Unhappy paths:**
+    - Missing `Authorization` header → return `401 Unauthorized` with `MISSING_API_KEY` code.
+    - Key not found in DB or hash mismatch → return `401 Unauthorized` with `INVALID_API_KEY` code.
+    - Key found but `is_active = false` (revoked) → return `403 Forbidden` with `REVOKED_API_KEY` code.
+    - Key environment mismatch (e.g. live key against test route) → return `403 Forbidden` with `ENVIRONMENT_MISMATCH` code.
 - [ ] **2.3. JWT Authentication Guard**
   - Configure JWT module and strategy for merchant dashboard administrative endpoints (`/admin/*`).
   - Implement `JwtAuthGuard` protecting these administrative endpoints.
+  - **Unhappy paths:**
+    - Expired JWT → return `401 Unauthorized` with `TOKEN_EXPIRED` code.
+    - Tampered/invalid JWT signature → return `401 Unauthorized` with `INVALID_TOKEN` code.
+- [ ] **2.4. API Key Revocation Endpoint**
+  - Implement `DELETE /admin/api-keys/:id` to set `is_active = false` for a given key.
+  - Ensure in-flight requests with that key are rejected by the guard immediately (stateless check on every request).
 
 ---
 
@@ -45,24 +56,55 @@ This document outlines the sequential, step-by-step implementation tasks for the
     - `POST /v1/checkout/order` (generate checkout links)
     - `POST /v1/checkout/tokenized-card-payment` (charge saved cards)
   - Ensure outbound requests log the request and response payloads, especially status codes and failure reasons.
+  - **Unhappy paths:**
+    - Nomba `4xx` (e.g. `invalid_token`, `card_expired`, `insufficient_funds`) → classify as **non-retryable** failure; mark `Transaction` as `failed`, do NOT re-enqueue to `ChargeQueue`, push to `DunningQueue` only if `grace_period_days > 0`.
+    - Nomba `5xx` or network timeout → classify as **retryable** failure; re-enqueue with exponential backoff without immediately marking the subscription as `past_due`.
+    - Nomba auth token expired → transparently refresh the Nomba access token (if OAuth-style) and retry once before surfacing the error.
+    - Checkout link generation fails (Nomba 4xx on `POST /v1/checkout/order`) → return `502 Bad Gateway` to the caller; do NOT create a `Transaction` record.
 - [ ] **3.2. Idempotency Engine**
   - Build an idempotency service that generates and persists a unique, deterministic UUID in a local log before making any charging requests to Nomba.
   - Add logic to verify if the key was already transmitted in case of an app crash/retry.
+  - **Unhappy paths:**
+    - Container crash after key is written to log but before Nomba responds → on reboot, detect transmitted-but-unconfirmed keys and query Nomba's order status endpoint to reconcile the transaction state before re-enqueuing.
+    - Duplicate job delivery by BullMQ (at-least-once semantics) → idempotency check at worker entry prevents double-charging; log a warning and skip the job.
 - [ ] **3.3. Circuit Breaker Pattern**
   - Implement a circuit breaker mechanism that monitors Nomba API failures (5xx responses).
   - If failure threshold is reached, trip the breaker and broadcast a signal to `SchedulerModule` to halt active worker queues.
+  - **Unhappy paths:**
+    - Breaker trips while a batch of jobs is mid-flight → jobs already dequeued must be re-queued with a delay so they are not lost.
+    - Breaker stays open for an extended period → emit a `provider.outage` event via WebhookModule to notify all affected merchants.
 
 ---
 
 ## 4. BILLING & DOMAIN LOGIC (BillingModule)
 - [ ] **4.1. Customer & Plan Management Service**
   - Build services to register customers, tokenise card links (storing `nomba_token`), and create/manage plans.
+  - **Unhappy paths:**
+    - Customer attempts to subscribe to a plan that belongs to a different merchant → return `403 Forbidden`.
+    - Plan is deleted/archived while a customer is actively subscribed → block deletion; require merchant to migrate or cancel affected subscriptions first.
+    - Duplicate customer registration (same email under same merchant) → return `409 Conflict` and surface the existing customer record.
+    - `nomba_token` tokenisation fails (e.g. card declined during setup) → do NOT create a subscription; return a descriptive error so the frontend can prompt the user to retry with a different card.
 - [ ] **4.2. Proration Engine**
   - Implement calculations for mid-cycle plan upgrades and downgrades.
   - Compute exact pro-rata differences and output adjusting invoice items or charge amounts.
+  - **Unhappy paths:**
+    - Upgrade/downgrade attempted when subscription is `past_due` or `canceled` → reject with `409 Conflict`; merchant must resolve the outstanding balance first.
+    - Plan amount changes after prorated charge is already computed but before it is applied → lock the proration snapshot at calculation time; do not re-compute mid-transaction.
+    - Custom-input billing model: merchant provides no amount at charge time → reject the charge job and notify via webhook with `custom_amount_missing` error.
 - [ ] **4.3. Grace Period & Trial Logic**
   - Write evaluator comparing `subscription.next_billing_date` plus the plan's custom configured `grace_period_days` to transition a subscription to `past_due` and eventually `canceled`.
-  - Handle trial period expiration transitions: if `trial_days` complete, check if `trial_require_card` was true (card already tokenized) to immediately charge, or if card is missing, notify the customer/merchant to add a card.
+  - Handle trial period expiration transitions:
+    - `trial_require_card = true`: card token is already captured; immediately promote subscription to `active` and enqueue first charge.
+    - `trial_require_card = false`: no card on file at trial end; set status to `past_due`, dispatch `trial.ended_no_card` webhook, and send merchant Telegram alert. Cancel after grace period if still no card.
+  - **Unhappy paths:**
+    - `trial_days = 0` and `trial_require_card = true` → treat as immediate paid subscription; skip trial state entirely.
+    - BillingWorker misses a scheduled trial-end window (e.g. service outage) → on next hourly run, catch all `trialing` subscriptions where `trial_end < NOW()` and process them retroactively without resetting dates.
+- [ ] **4.4. Subscription Reactivation**
+  - Allow merchant to reactivate a `canceled` subscription for a customer.
+  - Reset billing period to start from reactivation date; do not carry forward old dunning retry counters.
+  - **Unhappy paths:**
+    - Customer's `nomba_token` has expired since cancellation → require re-tokenisation before reactivation.
+    - Plan the subscription was on is archived → block reactivation; merchant must assign a new active plan.
 
 ---
 
@@ -71,12 +113,25 @@ This document outlines the sequential, step-by-step implementation tasks for the
   - Implement route to accept payload for one-time payments.
   - Invoke `ProviderModule` to request a Nomba checkoutLink.
   - Return a unique `session_id` and checkout URL to the merchant.
+  - **Unhappy paths:**
+    - Invalid or missing required fields (amount, currency, customer reference) → return `400 Bad Request` with field-level validation errors before hitting Nomba.
+    - Nomba checkout link generation fails → return `502 Bad Gateway`; do NOT persist a `Transaction` record.
+    - Duplicate `session_id` collision (extremely unlikely but must be handled) → regenerate and retry up to 3 times before returning `500`.
 - [ ] **5.2. Recurring Subscription Endpoint (`POST /api/v1/subscribe`)**
   - Implement route accepting a pre-configured `plan_id` or dynamic interval data.
   - Create a pending Subscription and Transaction in the database.
   - Return a checkout session URL.
+  - **Unhappy paths:**
+    - `plan_id` not found or does not belong to the authenticated merchant → return `404 Not Found`.
+    - Customer already has an `active` or `trialing` subscription to the same plan → return `409 Conflict`.
+    - Plan `billing_model = one_time` but subscription endpoint is called → return `400 Bad Request` with clear message directing to `POST /api/v1/pay`.
+    - Dynamic interval data provided but `interval` field is invalid → return `400 Bad Request`.
 - [ ] **5.3. Session Status Polling Endpoint (`GET /api/v1/sessions/:session_id/status`)**
   - Provide an endpoint to fetch the status of a specific checkout session so frontend applications can poll for success/failure.
+  - **Unhappy paths:**
+    - `session_id` does not exist → return `404 Not Found`.
+    - Session belongs to a different merchant (auth context mismatch) → return `403 Forbidden`.
+    - Session has expired without completion (TTL exceeded) → return status `expired` in response body, do not return `404`.
 
 ---
 
@@ -84,18 +139,36 @@ This document outlines the sequential, step-by-step implementation tasks for the
 - [ ] **6.1. Redis & BullMQ Integration**
   - Establish connection configurations to Upstash Redis.
   - Initialize the Redis client and BullMQ dashboard/module in NestJS.
+  - **Unhappy paths:**
+    - Redis connection lost at startup → crash-fast with a descriptive error; do NOT start the NestJS app without a working queue.
+    - Redis connection drops mid-operation → BullMQ handles reconnect internally; log the disconnect event and alert via Telegram if downtime exceeds 5 minutes.
 - [ ] **6.2. BillingWorker (Hourly Cron)**
   - Implement worker querying Turso hourly for subscriptions where:
     - Status is `active` and `next_billing_date <= NOW()` (process charge)
     - Status is `trialing` and `trial_end <= NOW()` (promote to active, or transition to canceled/past_due based on card presence and `trial_require_card`)
   - Push matching jobs into the `ChargeQueue`.
+  - **Unhappy paths:**
+    - Turso DB query fails (connection error) → log error, skip the cron cycle, do NOT push partial job batches; retry on the next hourly tick.
+    - Subscription's `nomba_token` is null when charge is attempted → skip charge, set status to `past_due`, dispatch `token_missing` webhook to merchant.
+    - Large batch of subscriptions due simultaneously → use cursor-based pagination when querying to avoid memory spikes; push jobs in batches.
 - [ ] **6.3. DunningWorker (Failure Retries & Queue)**
   - Implement queue worker executing failed charge attempts.
   - Implement exponential backoff or WAT 9:00 AM heuristic retry scheduling.
   - Cancel subscription if retries fail after `grace_period_days` limit is reached, then drop jobs into Dead Letter Queue (DLQ).
+  - **Unhappy paths:**
+    - Max retries hit while circuit breaker is open (Nomba outage) → do NOT cancel the subscription; instead, hold in `past_due` until circuit closes, then resume dunning from current retry count.
+    - DunningWorker crashes mid-retry → BullMQ job remains in active state; on worker restart the job is re-attempted; idempotency key prevents double-charge.
+    - Subscription is manually reactivated by merchant while a dunning job is queued → worker must check current subscription status before attempting charge and discard the stale job if status is no longer `past_due`.
 - [ ] **6.4. HealthCron & Queue Management**
   - Regularly ping Nomba health endpoint.
   - Pause the `ChargeQueue` if Nomba returns error states (circuit breaker tripped) and resume when online.
+  - **Unhappy paths:**
+    - HealthCron itself fails to run (Render sleep, crash) → Keep-Alive ping will restart the service; circuit breaker in ProviderModule provides redundant protection.
+    - Nomba health endpoint returns degraded (2xx but with partial outage body) → treat as operational; monitor for 5xx before tripping breaker.
+- [ ] **6.5. Dead Letter Queue (DLQ) Management**
+  - Persist all DLQ jobs with their full payload, error reason, subscription ID, and retry history.
+  - Expose an admin endpoint `GET /admin/dlq` for merchants to inspect dead jobs.
+  - Expose `POST /admin/dlq/:jobId/replay` to allow manual re-trigger of a dead job after the underlying issue is resolved.
 
 ---
 
@@ -104,20 +177,41 @@ This document outlines the sequential, step-by-step implementation tasks for the
   - Implement webhook receiver to verify Nomba signature headers.
   - Match webhook event payload (success/failed payment) to the corresponding `Transaction` and update state.
   - Update `Subscription` status (e.g. roll forward `next_billing_date` on success).
+  - **Unhappy paths:**
+    - Signature verification fails → return `401 Unauthorized`, log the attempt with IP and payload hash; do NOT update any state.
+    - Webhook payload references a `nomba_ref` that does not match any local `Transaction` → log as `orphaned_webhook`, return `200 OK` to Nomba to prevent retries, alert merchant.
+    - Webhook received for a `Transaction` already in terminal state (`success` or `failed`) → deduplicate silently; return `200 OK`; do NOT re-process.
+    - Nomba sends a `payment.pending` event followed later by `payment.success` → ensure state machine only advances forward (pending → success); reject backward transitions.
 - [ ] **7.2. Outbound Webhook Dispatcher**
   - Build dispatch queue to send signed webhook payloads to the merchant's `webhook_url`.
   - Handle retries with backoff for merchant webhook endpoints that fail.
-- [ ] **7.3. Merchant Notification Service**
-  - Implement Telegram/WhatsApp API integrations to send alert notifications (e.g., *"Charge failed for [Customer]. Retrying tomorrow."*).
+  - **Unhappy paths:**
+    - Merchant `webhook_url` returns non-2xx on first attempt → re-enqueue with exponential backoff (3 retries: 1 min, 5 min, 30 min).
+    - All retries exhausted → mark dispatch as `permanently_failed`; log to DB with full payload; surface in merchant dashboard as a missed event.
+    - Merchant `webhook_url` is not configured → skip dispatch silently; still deliver Telegram alerts if configured.
+    - Merchant webhook endpoint is unreachable (DNS failure, timeout) → treat as non-2xx and apply same retry logic.
+- [ ] **7.3. Merchant Notification Service (Telegram)**
+  - Implement Telegram Bot API integration to send alert notifications to the merchant's configured `telegram_chat_id`.
+  - **Unhappy paths:**
+    - Telegram chat ID is invalid or bot is blocked → log the failure; do NOT crash the webhook dispatch flow; mark notification as `undelivered`.
+    - Telegram API is unavailable → log the notification as `undelivered`; surface in merchant dashboard.
+    - Notification service is slow → dispatch notifications asynchronously via a separate BullMQ queue (`NotificationQueue`) so they never block the critical billing path.
 
 ---
 
 ## 8. OBSERVABILITY, TESTING & DEPLOYMENT
 - [ ] **8.1. Health Endpoint (`GET /health`)**
   - Expose a lightweight endpoint returning system health and current database connection status.
-- [ ] **8.2. Integration & End-to-End Tests**
+  - Include Redis/BullMQ queue health and Nomba circuit breaker state in the response.
+- [ ] **8.2. Structured Logging**
+  - Log all critical operations (transactions, webhooks, authentication events, charge attempts) with a consistent structured format including `merchant_id`, `subscription_id`, `transaction_id`, and outcome status.
+  - Do NOT log raw card data, Nomba tokens, or API key plaintext at any log level.
+- [ ] **8.3. Integration & End-to-End Tests**
   - Implement route-to-database integration tests covering:
-    - API authentication guards.
-    - One-time checkout creation.
+    - API authentication guards (valid key, revoked key, missing key, environment mismatch).
+    - One-time checkout creation (happy path and Nomba 502 failure).
     - Recurring subscription billing worker execution.
-    - Dunning retry execution loop.
+    - Trial expiry flow: with card and without card.
+    - Dunning retry execution loop through to DLQ.
+    - Inbound webhook signature verification (valid and invalid).
+    - Outbound webhook retry exhaustion.

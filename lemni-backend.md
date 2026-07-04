@@ -53,7 +53,7 @@ The asynchronous heart of the engine.
 
 * **Inbound (POST /api/v1/webhooks/nomba):** Verifies Nomba webhook signatures. Updates the local transaction state to success or failed.  
 * **Outbound Dispatcher:** Pushes JSON payloads to the merchant's registered webhook\_url (e.g., informing BananaFitness to lock a user out).  
-* **Notification Service:** Formats critical alerts and pushes them asynchronously to the merchant's Telegram Chat ID or WhatsApp API.
+* **Notification Service:** Formats critical alerts and pushes them asynchronously to the merchant's Telegram Chat ID.
 
 ## **3\. Database Schema (Turso Relational Design)**
 
