@@ -352,6 +352,129 @@ paths:
       summary: Delete a billing plan
       tags:
         - merchant-dashboard/billing
+  /admin/plans/{planId}/checkout-link:
+    get:
+      description: Generates a shareable checkout URL for a billing plan. Merchants can distribute this link to customers who can then initiate checkout.
+      operationId: BillingController_getCheckoutLink
+      parameters:
+        - description: The billing plan ID
+          in: path
+          name: planId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  checkoutUrl:
+                    description: Shareable checkout URL for the plan
+                    example: http://localhost:5173/checkout/plan_xyz
+                    format: uri
+                    type: string
+                  planId:
+                    description: The billing plan ID
+                    example: plan_xyz
+                    type: string
+                type: object
+          description: Checkout link generated successfully
+        '401':
+          description: Unauthorized JWT session token
+        '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Plan not found
+                    type: string
+                type: object
+          description: Plan not found
+      security:
+        - bearer: []
+      summary: Get shareable checkout link for a plan
+      tags:
+        - merchant-dashboard/billing
+  /admin/plans/{planId}/checkout:
+    post:
+      description: Generates a checkout session from a customer email for a specific billing plan. Called when a customer submits their email on the shareable checkout page.
+      operationId: BillingController_createCheckoutSession
+      parameters:
+        - description: The billing plan ID
+          in: path
+          name: planId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                callbackUrl:
+                  description: Optional callback URL to redirect customer after successful payment
+                  example: https://mywebsite.com/success
+                  format: uri
+                  type: string
+                email:
+                  description: Customer email address
+                  example: customer@example.com
+                  format: email
+                  type: string
+              required:
+                - email
+              type: object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  checkoutUrl:
+                    description: URL to direct customer to for payment
+                    example: https://checkout.nomba.com/pay/mock_link_456
+                    format: uri
+                    type: string
+                  sessionId:
+                    description: Unique session ID for tracking
+                    example: tx_9876543210fedcba
+                    type: string
+                  subscriptionId:
+                    description: Subscription created for this session
+                    example: sub_b39efdb0
+                    type: string
+                type: object
+          description: Checkout session generated successfully
+        '400':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Invalid email format or plan configuration
+                    type: string
+                type: object
+          description: Invalid input
+        '401':
+          description: Unauthorized JWT session token
+        '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Plan not found
+                    type: string
+                type: object
+          description: Plan not found
+      security:
+        - bearer: []
+      summary: Create checkout session from customer email
+      tags:
+        - merchant-dashboard/billing
   /admin/subscriptions/{id}/reactivate:
     post:
       description: Resets the billing cycle start date and shifts the subscription back to active status.

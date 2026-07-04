@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
 import {
@@ -14,11 +15,17 @@ import {
 } from '../database/schema';
 import { eq, and, sql, gte, lte, desc } from 'drizzle-orm';
 import * as crypto from 'crypto';
+import { CheckoutService } from '../checkout/checkout.service';
 import type { TransactionFilterDto } from './dto/billing.dto';
+import type { PublicPlanSessionDto } from '../checkout/dto/checkout.dto';
 
 @Injectable()
 export class BillingService {
-  constructor(@Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB,
+    private readonly configService: ConfigService,
+    private readonly checkoutService: CheckoutService,
+  ) {}
 
   /**
    * Creates a new pricing plan for a merchant.
@@ -299,5 +306,43 @@ export class BillingService {
         offset: offsetVal,
       },
     };
+  }
+
+  /**
+   * Generate a shareable checkout link for a plan.
+   * Merchants can share this URL without needing a website.
+   */
+  async getCheckoutLink(merchantId: string, planId: string) {
+    const [plan] = await this.db
+      .select()
+      .from(plans)
+      .where(and(eq(plans.id, planId), eq(plans.merchantId, merchantId)));
+
+    if (!plan) {
+      throw new NotFoundException('Plan not found');
+    }
+
+    const dashboardUrl = this.configService.get<string>(
+      'DASHBOARD_URL',
+      'http://localhost:5173',
+    );
+
+    const checkoutUrl = `${dashboardUrl}/checkout/${planId}`;
+
+    return {
+      checkoutUrl,
+      planId,
+    };
+  }
+
+  /**
+   * Create a public checkout session for a plan.
+   * Called when customer submits email on the public checkout page.
+   */
+  async createPublicCheckout(
+    planId: string,
+    data: PublicPlanSessionDto,
+  ) {
+    return this.checkoutService.createPublicPlanSession(planId, data);
   }
 }

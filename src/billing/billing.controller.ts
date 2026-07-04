@@ -33,6 +33,8 @@ import type {
   RegisterCustomerDto,
   TransactionFilterDto,
 } from './dto/billing.dto';
+import { PublicPlanSessionSchema } from '../checkout/dto/checkout.dto';
+import type { PublicPlanSessionDto } from '../checkout/dto/checkout.dto';
 
 @ApiTags('merchant-dashboard/billing')
 @ApiBearerAuth()
@@ -331,5 +333,131 @@ export class BillingController {
     const merchantId = (req.user as Record<string, unknown>)
       .merchantId as string;
     return this.billingService.getTransactions(merchantId, query);
+  }
+
+  @Get('plans/:planId/checkout-link')
+  @ApiOperation({
+    summary: 'Generate shareable checkout link for a plan',
+    description:
+      'Returns a shareable URL that merchants can distribute without a website. Customers click the link, enter their email, and are directed to payment. Useful for merchants without existing website integrations.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Shareable checkout link generated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        checkoutUrl: {
+          type: 'string',
+          format: 'uri',
+          example: 'http://localhost:5173/checkout/plan_7a8dca9',
+          description: 'Shareable URL that customers can click to subscribe',
+        },
+        planId: {
+          type: 'string',
+          example: 'plan_7a8dca9',
+          description: 'The plan ID embedded in the link',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized JWT session token' })
+  @ApiResponse({
+    status: 404,
+    description: 'Plan not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'Plan not found' },
+      },
+    },
+  })
+  async getCheckoutLink(
+    @Param('planId') planId: string,
+    @Request() req: ExpressRequest,
+  ) {
+    const merchantId = (req.user as Record<string, unknown>)
+      .merchantId as string;
+    return this.billingService.getCheckoutLink(merchantId, planId);
+  }
+
+  @Post('plans/:planId/checkout')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ZodValidationPipe(PublicPlanSessionSchema))
+  @ApiOperation({
+    summary: 'Generate checkout session for public plan link',
+    description:
+      'Called by the dashboard frontend when a customer submits their email on the public checkout page. Generates a Nomba checkout session and returns the payment URL.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['email'],
+      properties: {
+        email: {
+          type: 'string',
+          format: 'email',
+          example: 'customer@example.com',
+          description: 'Customer email for subscription',
+        },
+        callbackUrl: {
+          type: 'string',
+          format: 'uri',
+          example: 'https://mywebsite.com/sub-success',
+          description: 'Optional redirect URL after successful payment',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Checkout session generated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        sessionId: {
+          type: 'string',
+          example: 'tx_1234567890abcdef',
+          description: 'Unique session ID for tracking',
+        },
+        subscriptionId: {
+          type: 'string',
+          example: 'sub_a28deca9',
+          description: 'Subscription created for this session',
+        },
+        checkoutUrl: {
+          type: 'string',
+          format: 'uri',
+          example: 'https://checkout.nomba.com/pay/mock_link_123',
+          description: 'Nomba checkout URL to redirect customer to',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input (email format, plan configuration, etc.)',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'Invalid email format' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Plan not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'Plan not found' },
+      },
+    },
+  })
+  async createPublicCheckout(
+    @Param('planId') planId: string,
+    @Body() body: PublicPlanSessionDto,
+  ) {
+    return this.billingService.createPublicCheckout(planId, body);
   }
 }
