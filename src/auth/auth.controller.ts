@@ -3,7 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
 
-@ApiTags('admin/api-keys')
+@ApiTags('merchant-dashboard/api-keys')
 @ApiBearerAuth()
 @Controller('admin/api-keys')
 export class AuthController {

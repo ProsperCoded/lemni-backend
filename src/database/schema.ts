@@ -72,3 +72,12 @@ export const transactions = sqliteTable('transactions', {
   nombaRef: text('nomba_ref'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const idempotencyKeys = sqliteTable('idempotency_keys', {
+  id: text('id').primaryKey(), // UUID string
+  requestType: text('request_type').notNull(),
+  payload: text('payload').notNull(),
+  status: text('status', { enum: ['pending', 'completed', 'failed'] }).notNull().default('pending'),
+  response: text('response'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});

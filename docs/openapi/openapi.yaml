@@ -42,6 +42,6 @@ paths:
         - bearer: []
       summary: Revoke an API key
       tags:
-        - admin/api-keys
+        - merchant-dashboard/api-keys
 servers: []
 tags: []
