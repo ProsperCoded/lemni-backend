@@ -345,4 +345,18 @@ export class BillingService {
   ) {
     return this.checkoutService.createPublicPlanSession(planId, data);
   }
+
+  /**
+   * Request unsubscribe OTP - delegates to CheckoutService.
+   */
+  async requestUnsubscribe(subscriptionId: string, email: string) {
+    return this.checkoutService.requestUnsubscribe(subscriptionId, email);
+  }
+
+  /**
+   * Confirm unsubscribe with OTP - delegates to CheckoutService.
+   */
+  async confirmUnsubscribe(subscriptionId: string, code: string) {
+    return this.checkoutService.confirmUnsubscribe(subscriptionId, code);
+  }
 }

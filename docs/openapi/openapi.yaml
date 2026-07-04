@@ -352,53 +352,11 @@ paths:
       summary: Delete a billing plan
       tags:
         - merchant-dashboard/billing
-  /admin/plans/{planId}/checkout-link:
-    get:
-      description: Returns a shareable URL that merchants can distribute without a website. Customers click the link, enter their email, and are directed to payment. Useful for merchants without existing website integrations.
-      operationId: BillingController_getCheckoutLink
-      parameters:
-        - in: path
-          name: planId
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                properties:
-                  checkoutUrl:
-                    description: Shareable URL that customers can click to subscribe
-                    example: http://localhost:5173/checkout/plan_7a8dca9
-                    format: uri
-                    type: string
-                  planId:
-                    description: The plan ID embedded in the link
-                    example: plan_7a8dca9
-                    type: string
-                type: object
-          description: Shareable checkout link generated successfully
-        '401':
-          description: Unauthorized JWT session token
-        '404':
-          content:
-            application/json:
-              schema:
-                properties:
-                  error:
-                    example: Plan not found
-                    type: string
-                type: object
-          description: Plan not found
-      security:
-        - bearer: []
-      summary: Generate shareable checkout link for a plan
-      tags:
-        - merchant-dashboard/billing
   /admin/plans/{planId}/checkout:
     post:
-      description: Called by the dashboard frontend when a customer submits their email on the public checkout page. Generates a Nomba checkout session and returns the payment URL.
+      description: >-
+        Called by the dashboard frontend when a customer submits their email on the public checkout page. Generates a
+        Nomba checkout session and returns the payment URL.
       operationId: BillingController_createPublicCheckout
       parameters:
         - in: path
@@ -468,7 +426,53 @@ paths:
           description: Plan not found
       security:
         - bearer: []
-      summary: Generate checkout session for public plan link
+      summary: Generate checkout session for public plan link (public)
+      tags:
+        - merchant-dashboard/billing
+  /admin/plans/{planId}/checkout-link:
+    get:
+      description: >-
+        Returns a shareable URL that merchants can distribute without a website. Customers click the link, enter their
+        email, and are directed to payment. Useful for merchants without existing website integrations.
+      operationId: BillingController_getCheckoutLink
+      parameters:
+        - in: path
+          name: planId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  checkoutUrl:
+                    description: Shareable URL that customers can click to subscribe
+                    example: http://localhost:5173/checkout/plan_7a8dca9
+                    format: uri
+                    type: string
+                  planId:
+                    description: The plan ID embedded in the link
+                    example: plan_7a8dca9
+                    type: string
+                type: object
+          description: Shareable checkout link generated successfully
+        '401':
+          description: Unauthorized JWT session token
+        '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Plan not found
+                    type: string
+                type: object
+          description: Plan not found
+      security:
+        - bearer: []
+      summary: Generate shareable checkout link for a plan
       tags:
         - merchant-dashboard/billing
   /admin/subscriptions/{id}/reactivate:
@@ -539,6 +543,139 @@ paths:
       security:
         - bearer: []
       summary: Reactivate a canceled subscription
+      tags:
+        - merchant-dashboard/billing
+  /admin/subscriptions/{id}/unsubscribe/confirm:
+    post:
+      description: Verifies the OTP code sent to the subscription owner email and cancels the subscription immediately.
+      operationId: BillingController_confirmUnsubscribe
+      parameters:
+        - description: The subscription ID
+          in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                code:
+                  description: 6-digit OTP code sent to email
+                  example: '123456'
+                  type: string
+              required:
+                - code
+              type: object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    description: Confirmation message
+                    example: Subscription successfully canceled
+                    type: string
+                  success:
+                    description: Success flag
+                    example: true
+                    type: boolean
+                type: object
+          description: Subscription successfully canceled
+        '400':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Invalid or expired code, or subscription already canceled
+                    type: string
+                type: object
+          description: Invalid or expired code, or subscription already canceled
+        '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Subscription not found
+                    type: string
+                type: object
+          description: Subscription not found
+      security:
+        - bearer: []
+      summary: Confirm unsubscribe with OTP (public)
+      tags:
+        - merchant-dashboard/billing
+  /admin/subscriptions/{id}/unsubscribe/request:
+    post:
+      description: >-
+        Generates and sends a 6-digit OTP code to the subscription owner email to verify unsubscribe request.
+        Customer-initiated flow.
+      operationId: BillingController_requestUnsubscribe
+      parameters:
+        - description: The subscription ID
+          in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                email:
+                  description: Email address associated with the subscription
+                  example: subscriber@test.com
+                  format: email
+                  type: string
+              required:
+                - email
+              type: object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    description: Confirmation message
+                    example: Verification code sent to subscriber@test.com
+                    type: string
+                type: object
+          description: Verification code sent successfully
+        '403':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Email does not match subscription owner
+                    type: string
+                type: object
+          description: Email does not match subscription owner
+        '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Subscription not found
+                    type: string
+                type: object
+          description: Subscription not found
+      security:
+        - bearer: []
+      summary: Request email OTP to unsubscribe (public)
       tags:
         - merchant-dashboard/billing
   /admin/transactions:

@@ -19,6 +19,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiParam,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BillingService } from './billing.service';
@@ -33,8 +34,8 @@ import type {
   RegisterCustomerDto,
   TransactionFilterDto,
 } from './dto/billing.dto';
-import { PublicPlanSessionSchema } from '../checkout/dto/checkout.dto';
-import type { PublicPlanSessionDto } from '../checkout/dto/checkout.dto';
+import { PublicPlanSessionSchema, UnsubscribeRequestSchema, UnsubscribeConfirmSchema } from '../checkout/dto/checkout.dto';
+import type { PublicPlanSessionDto, UnsubscribeRequestDto, UnsubscribeConfirmDto } from '../checkout/dto/checkout.dto';
 
 @ApiTags('merchant-dashboard/billing')
 @ApiBearerAuth()
@@ -385,7 +386,7 @@ export class BillingController {
   @HttpCode(HttpStatus.OK)
   @UsePipes(new ZodValidationPipe(PublicPlanSessionSchema))
   @ApiOperation({
-    summary: 'Generate checkout session for public plan link',
+    summary: 'Generate checkout session for public plan link (public)',
     description:
       'Called by the dashboard frontend when a customer submits their email on the public checkout page. Generates a Nomba checkout session and returns the payment URL.',
   })
@@ -459,5 +460,158 @@ export class BillingController {
     @Body() body: PublicPlanSessionDto,
   ) {
     return this.billingService.createPublicCheckout(planId, body);
+  }
+
+  @Post('subscriptions/:id/unsubscribe/request')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ZodValidationPipe(UnsubscribeRequestSchema))
+  @ApiParam({
+    name: 'id',
+    description: 'The subscription ID',
+  })
+  @ApiOperation({
+    summary: 'Request email OTP to unsubscribe (public)',
+    description:
+      'Generates and sends a 6-digit OTP code to the subscription owner email to verify unsubscribe request. Customer-initiated flow.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['email'],
+      properties: {
+        email: {
+          type: 'string',
+          format: 'email',
+          example: 'subscriber@test.com',
+          description: 'Email address associated with the subscription',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Verification code sent successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Verification code sent to subscriber@test.com',
+          description: 'Confirmation message',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Email does not match subscription owner',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'string',
+          example: 'Email does not match subscription owner',
+          description: 'Error message',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Subscription not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'string',
+          example: 'Subscription not found',
+          description: 'Error message',
+        },
+      },
+    },
+  })
+  async requestUnsubscribe(
+    @Param('id') id: string,
+    @Body() body: UnsubscribeRequestDto,
+  ) {
+    return this.billingService.requestUnsubscribe(id, body.email);
+  }
+
+  @Post('subscriptions/:id/unsubscribe/confirm')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ZodValidationPipe(UnsubscribeConfirmSchema))
+  @ApiParam({
+    name: 'id',
+    description: 'The subscription ID',
+  })
+  @ApiOperation({
+    summary: 'Confirm unsubscribe with OTP (public)',
+    description: 'Verifies the OTP code sent to the subscription owner email and cancels the subscription immediately.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['code'],
+      properties: {
+        code: {
+          type: 'string',
+          example: '123456',
+          description: '6-digit OTP code sent to email',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription successfully canceled',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'boolean',
+          example: true,
+          description: 'Success flag',
+        },
+        message: {
+          type: 'string',
+          example: 'Subscription successfully canceled',
+          description: 'Confirmation message',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid or expired code, or subscription already canceled',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'string',
+          example: 'Invalid or expired code, or subscription already canceled',
+          description: 'Error message',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Subscription not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'string',
+          example: 'Subscription not found',
+          description: 'Error message',
+        },
+      },
+    },
+  })
+  async confirmUnsubscribe(
+    @Param('id') id: string,
+    @Body() body: UnsubscribeConfirmDto,
+  ) {
+    return this.billingService.confirmUnsubscribe(id, body.code);
   }
 }
