@@ -1,4 +1,10 @@
-import { Injectable, Logger, HttpException, HttpStatus, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  HttpException,
+  HttpStatus,
+  Inject,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IdempotencyService } from './idempotency.service';
 import { CircuitBreakerService } from './circuit-breaker.service';
@@ -13,7 +19,9 @@ export class NombaClient {
     private readonly idempotencyService: IdempotencyService,
     private readonly circuitBreakerService: CircuitBreakerService,
   ) {
-    this.baseUrl = this.configService.get<string>('NOMBA_API_URL') || 'https://api.nomba.com';
+    this.baseUrl =
+      this.configService.get<string>('NOMBA_API_URL') ||
+      'https://api.nomba.com';
   }
 
   /**
@@ -26,7 +34,9 @@ export class NombaClient {
     if (mode === 'live') {
       return {
         clientId: this.configService.get<string>('NOMBA_LIVE_CLIENT_ID'),
-        clientSecret: this.configService.get<string>('NOMBA_LIVE_CLIENT_SECRET'),
+        clientSecret: this.configService.get<string>(
+          'NOMBA_LIVE_CLIENT_SECRET',
+        ),
         accountId,
       };
     }
@@ -41,7 +51,10 @@ export class NombaClient {
   /**
    * Wraps Nomba's POST /v1/checkout/order (generating checkout links)
    */
-  async createCheckoutOrder(idempotencyKey: string, orderPayload: any): Promise<any> {
+  async createCheckoutOrder(
+    idempotencyKey: string,
+    orderPayload: any,
+  ): Promise<any> {
     return this.executeRequest(
       idempotencyKey,
       'create_checkout_order',
@@ -53,7 +66,10 @@ export class NombaClient {
   /**
    * Wraps Nomba's POST /v1/checkout/tokenized-card-payment (executing tokenized card charges)
    */
-  async chargeTokenizedCard(idempotencyKey: string, paymentPayload: any): Promise<any> {
+  async chargeTokenizedCard(
+    idempotencyKey: string,
+    paymentPayload: any,
+  ): Promise<any> {
     return this.executeRequest(
       idempotencyKey,
       'charge_tokenized_card',
@@ -84,11 +100,15 @@ export class NombaClient {
     const existing = await this.idempotencyService.getKeyRecord(idempotencyKey);
     if (existing) {
       if (existing.status === 'completed') {
-        this.logger.log(`Idempotency hit! Returning cached response for key: ${idempotencyKey}`);
+        this.logger.log(
+          `Idempotency hit! Returning cached response for key: ${idempotencyKey}`,
+        );
         return existing.response;
       }
       if (existing.status === 'pending') {
-        this.logger.warn(`Transaction retry detected while original is still pending: ${idempotencyKey}`);
+        this.logger.warn(
+          `Transaction retry detected while original is still pending: ${idempotencyKey}`,
+        );
         throw new HttpException(
           'A transaction with this idempotency key is already in progress',
           HttpStatus.CONFLICT,
@@ -97,7 +117,11 @@ export class NombaClient {
     }
 
     // 3. Register the key in the database as pending prior to execution
-    await this.idempotencyService.registerKey(idempotencyKey, requestType, payload);
+    await this.idempotencyService.registerKey(
+      idempotencyKey,
+      requestType,
+      payload,
+    );
 
     const { clientId, clientSecret, accountId } = this.getCredentials();
     const url = `${this.baseUrl}${endpoint}`;
@@ -115,7 +139,9 @@ export class NombaClient {
       headers['client-secret'] = clientSecret;
     }
 
-    this.logger.log(`Dispatching outbound request to Nomba: POST ${url} [Idempotency Key: ${idempotencyKey}]`);
+    this.logger.log(
+      `Dispatching outbound request to Nomba: POST ${url} [Idempotency Key: ${idempotencyKey}]`,
+    );
     this.logger.debug(`Request Payload: ${JSON.stringify(payload)}`);
 
     try {
@@ -139,7 +165,11 @@ export class NombaClient {
       if (response.status >= 500) {
         // Record gateway failures
         this.circuitBreakerService.recordFailure();
-        await this.idempotencyService.resolveKey(idempotencyKey, 'failed', responseData);
+        await this.idempotencyService.resolveKey(
+          idempotencyKey,
+          'failed',
+          responseData,
+        );
         throw new HttpException(
           `Payment gateway returned server error: ${response.status}`,
           HttpStatus.BAD_GATEWAY,
@@ -148,16 +178,25 @@ export class NombaClient {
 
       if (!response.ok) {
         // Client errors (4xx) do not trip the circuit breaker but resolve as failed transaction attempts
-        await this.idempotencyService.resolveKey(idempotencyKey, 'failed', responseData);
+        await this.idempotencyService.resolveKey(
+          idempotencyKey,
+          'failed',
+          responseData,
+        );
         throw new HttpException(
-          responseData.message || `Payment gateway request failed: ${response.status}`,
+          responseData.message ||
+            `Payment gateway request failed: ${response.status}`,
           response.status,
         );
       }
 
       // Success
       this.circuitBreakerService.recordSuccess();
-      await this.idempotencyService.resolveKey(idempotencyKey, 'completed', responseData);
+      await this.idempotencyService.resolveKey(
+        idempotencyKey,
+        'completed',
+        responseData,
+      );
       return responseData;
     } catch (error) {
       if (error instanceof HttpException) {
@@ -165,8 +204,14 @@ export class NombaClient {
       }
       // Network timeouts, DNS issues, or total connection drops count as circuit breaker failures
       this.circuitBreakerService.recordFailure();
-      const networkError = { message: error.message || 'Network connection failed' };
-      await this.idempotencyService.resolveKey(idempotencyKey, 'failed', networkError);
+      const networkError = {
+        message: error.message || 'Network connection failed',
+      };
+      await this.idempotencyService.resolveKey(
+        idempotencyKey,
+        'failed',
+        networkError,
+      );
       throw new HttpException(
         'Outbound connection to payment gateway failed',
         HttpStatus.GATEWAY_TIMEOUT,

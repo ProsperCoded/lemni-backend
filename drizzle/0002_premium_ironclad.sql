@@ -1,0 +1,1 @@
+ALTER TABLE `merchants` ADD `default_redirect_url` text;

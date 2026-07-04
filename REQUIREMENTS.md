@@ -67,12 +67,12 @@ This document outlines the sequential, step-by-step implementation tasks for the
     - Nomba `5xx` or network timeout → classify as **retryable** failure; re-enqueue with exponential backoff without immediately marking the subscription as `past_due`.
     - Nomba auth token expired → transparently refresh the Nomba access token by requesting a new one and retry once before surfacing the error.
     - Checkout link generation fails (Nomba 4xx on `POST /v1/checkout/order`) → return `502 Bad Gateway` to the caller; do NOT create a `Transaction` record.
-- [x] **3.2. Idempotency Engine**
-  - Build an idempotency service that generates and persists a unique, deterministic UUID in a local log before making any charging requests to Nomba.
-  - Add logic to verify if the key was already transmitted in case of an app crash/retry.
+- [ ] **3.2. Idempotent Transaction Pattern**
+  - Implement idempotency checks leveraging the `Transaction` table directly. Use `transaction.id` as the unique reference and idempotency key when communicating with Nomba.
+  - Store the request payload and payment response metadata in the `payload` and `response` columns of the corresponding `Transaction` record.
   - **Unhappy paths:**
-    - Container crash after key is written to log but before Nomba responds → on reboot, detect transmitted-but-unconfirmed keys and query Nomba's order status endpoint to reconcile the transaction state before re-enqueuing.
-    - Duplicate job delivery by BullMQ (at-least-once semantics) → idempotency check at worker entry prevents double-charging; log a warning and skip the job.
+    - Duplicate charge attempt / duplicate BullMQ job delivery → check if the `Transaction` status is already `success` or `failed`. If so, skip the attempt and return the cached transaction details.
+    - Container crash mid-request → on reboot, scan `pending` transactions and query Nomba's transaction status endpoint using `transaction.id` to reconcile state before deciding to retry.
 - [x] **3.3. Circuit Breaker Pattern**
   - Implement a circuit breaker mechanism that monitors Nomba API failures (5xx responses).
   - If failure threshold is reached, trip the breaker and broadcast a signal to `SchedulerModule` to halt active worker queues.
@@ -83,21 +83,21 @@ This document outlines the sequential, step-by-step implementation tasks for the
 ---
 
 ## 4. BILLING & DOMAIN LOGIC (BillingModule)
-- [ ] **4.1. Customer & Plan Management Service**
+- [x] **4.1. Customer & Plan Management Service**
   - Build services to register customers, tokenise card links (storing `nomba_token`), and create/manage plans.
   - **Unhappy paths:**
     - Customer attempts to subscribe to a plan that belongs to a different merchant → return `403 Forbidden`.
     - Plan is deleted/archived while a customer is actively subscribed → block deletion; require merchant to migrate or cancel affected subscriptions first.
     - Duplicate customer registration (same email under same merchant) → return `409 Conflict` and surface the existing customer record.
     - `nomba_token` tokenisation fails (e.g. card declined during setup) → do NOT create a subscription; return a descriptive error so the frontend can prompt the user to retry with a different card.
-- [ ] **4.2. Proration Engine**
+- [x] **4.2. Proration Engine**
   - Implement calculations for mid-cycle plan upgrades and downgrades.
   - Compute exact pro-rata differences and output adjusting invoice items or charge amounts.
   - **Unhappy paths:**
     - Upgrade/downgrade attempted when subscription is `past_due` or `canceled` → reject with `409 Conflict`; merchant must resolve the outstanding balance first.
     - Plan amount changes after prorated charge is already computed but before it is applied → lock the proration snapshot at calculation time; do not re-compute mid-transaction.
     - Custom-input billing model: merchant provides no amount at charge time → reject the charge job and notify via webhook with `custom_amount_missing` error.
-- [ ] **4.3. Grace Period & Trial Logic**
+- [x] **4.3. Grace Period & Trial Logic**
   - Write evaluator comparing `subscription.next_billing_date` plus the plan's custom configured `grace_period_days` to transition a subscription to `past_due` and eventually `canceled`.
   - Handle trial period expiration transitions:
     - `trial_require_card = true`: card token is already captured; immediately promote subscription to `active` and enqueue first charge.
@@ -105,7 +105,7 @@ This document outlines the sequential, step-by-step implementation tasks for the
   - **Unhappy paths:**
     - `trial_days = 0` and `trial_require_card = true` → treat as immediate paid subscription; skip trial state entirely.
     - BillingWorker misses a scheduled trial-end window (e.g. service outage) → on next hourly run, catch all `trialing` subscriptions where `trial_end < NOW()` and process them retroactively without resetting dates.
-- [ ] **4.4. Subscription Reactivation**
+- [x] **4.4. Subscription Reactivation**
   - Allow merchant to reactivate a `canceled` subscription for a customer.
   - Reset billing period to start from reactivation date; do not carry forward old dunning retry counters.
   - **Unhappy paths:**
@@ -115,7 +115,7 @@ This document outlines the sequential, step-by-step implementation tasks for the
 ---
 
 ## 5. API BOUNDARY (CheckoutModule)
-- [ ] **5.1. One-Time Payment Endpoint (`POST /api/v1/pay`)**
+- [x] **5.1. One-Time Payment Endpoint (`POST /api/v1/pay`)**
   - Implement route to accept payload for one-time payments.
   - Invoke `ProviderModule` to request a Nomba checkoutLink.
   - Return a unique `session_id` and checkout URL to the merchant.
@@ -123,7 +123,7 @@ This document outlines the sequential, step-by-step implementation tasks for the
     - Invalid or missing required fields (amount, currency, customer reference) → return `400 Bad Request` with field-level validation errors before hitting Nomba.
     - Nomba checkout link generation fails → return `502 Bad Gateway`; do NOT persist a `Transaction` record.
     - Duplicate `session_id` collision (extremely unlikely but must be handled) → regenerate and retry up to 3 times before returning `500`.
-- [ ] **5.2. Recurring Subscription Endpoint (`POST /api/v1/subscribe`)**
+- [x] **5.2. Recurring Subscription Endpoint (`POST /api/v1/subscribe`)**
   - Implement route accepting a pre-configured `plan_id` or dynamic interval data.
   - Create a pending Subscription and Transaction in the database.
   - Return a checkout session URL.
@@ -132,7 +132,7 @@ This document outlines the sequential, step-by-step implementation tasks for the
     - Customer already has an `active` or `trialing` subscription to the same plan → return `409 Conflict`.
     - Plan `billing_model = one_time` but subscription endpoint is called → return `400 Bad Request` with clear message directing to `POST /api/v1/pay`.
     - Dynamic interval data provided but `interval` field is invalid → return `400 Bad Request`.
-- [ ] **5.3. Session Status Polling Endpoint (`GET /api/v1/sessions/:session_id/status`)**
+- [x] **5.3. Session Status Polling Endpoint (`GET /api/v1/sessions/:session_id/status`)**
   - Provide an endpoint to fetch the status of a specific checkout session so frontend applications can poll for success/failure.
   - **Unhappy paths:**
     - `session_id` does not exist → return `404 Not Found`.

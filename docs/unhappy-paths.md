@@ -85,18 +85,13 @@ This document catalogues every identified failure scenario across the Lemni back
 
 ## UP-03 · Idempotency & Crash Recovery
 
-### UP-03.1 Container crash after idempotency key written but before Nomba responds
-- **Trigger:** Process terminates between log write and Nomba HTTP response.
-- **Recovery on reboot:**
-  1. Detect all idempotency keys with status `transmitted_unconfirmed`.
-  2. Query Nomba's order status endpoint for each unconfirmed key.
-  3. Reconcile local `Transaction` state from Nomba's response.
-  4. Re-enqueue only if Nomba confirms no charge was made.
+### UP-03.1 Container crash mid-request
+- **Trigger:** Process terminates during an active outbound charge request to Nomba.
+- **Recovery:** On reboot or next retry, the system scans `pending` transactions and queries Nomba's transaction status endpoint using `Transaction.id` (which was passed as Nomba's reference/idempotency key) to reconcile the state before re-enqueuing or retrying.
 
 ### UP-03.2 Duplicate BullMQ job delivery
-- **Trigger:** BullMQ at-least-once semantics causes the same job to be delivered twice.
-- **Action:** Idempotency check at worker entry finds an existing confirmed key → skip job, emit a warning log.
-- **State change:** None (no double-charge).
+- **Trigger:** BullMQ at-least-once semantics triggers a duplicate charge job.
+- **Action:** The system checks the database first; if `Transaction.status` is already `success` or `failed`, it returns the cached transaction response payload. If it still sends to Nomba, Nomba's gateway identifies the duplicate `Transaction.id` reference and returns the matching response safely without double charging.
 
 ---
 

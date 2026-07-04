@@ -1,4 +1,4 @@
-`import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Subject } from 'rxjs';
 
 export type BreakerState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
@@ -37,7 +37,7 @@ export class CircuitBreakerService {
 
   recordFailure() {
     this.failureCount++;
-    this.logger.warn(`Consecutive gateway failure count: ${this.failureCount}/${this.failureThreshold}`);
+    this.logger.warn('Consecutive gateway failure count: ' + this.failureCount + '/' + this.failureThreshold);
 
     if (this.state === 'CLOSED' && this.failureCount >= this.failureThreshold) {
       this.transitionTo('OPEN');
@@ -47,7 +47,7 @@ export class CircuitBreakerService {
   }
 
   private transitionTo(newState: BreakerState) {
-    this.logger.warn(`Circuit Breaker state transitioning: ${this.state} -> ${newState}`);
+    this.logger.warn('Circuit Breaker state transitioning: ' + this.state + ' -> ' + newState);
     this.state = newState;
     this.lastStateChange = Date.now();
     this.stateChange$.next({ state: newState });

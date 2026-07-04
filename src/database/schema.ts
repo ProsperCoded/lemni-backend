@@ -7,6 +7,7 @@ export const merchants = sqliteTable('merchants', {
   email: text('email').notNull(),
   webhookUrl: text('webhook_url'),
   telegramChatId: text('telegram_chat_id'),
+  defaultRedirectUrl: text('default_redirect_url'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -70,14 +71,8 @@ export const transactions = sqliteTable('transactions', {
   amount: real('amount').notNull(),
   status: text('status', { enum: ['pending', 'success', 'failed'] }).notNull(),
   nombaRef: text('nomba_ref'),
+  payload: text('payload'), // Stores request payload details for idempotency checks
+  response: text('response'), // Stores payment gateway response logs
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
 
-export const idempotencyKeys = sqliteTable('idempotency_keys', {
-  id: text('id').primaryKey(), // UUID string
-  requestType: text('request_type').notNull(),
-  payload: text('payload').notNull(),
-  status: text('status', { enum: ['pending', 'completed', 'failed'] }).notNull().default('pending'),
-  response: text('response'),
-  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
-});

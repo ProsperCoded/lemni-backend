@@ -6,6 +6,8 @@ import configuration from './config/configuration';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { ProviderModule } from './provider/provider.module';
+import { BillingModule } from './billing/billing.module';
+import { CheckoutModule } from './checkout/checkout.module';
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { ProviderModule } from './provider/provider.module';
     DatabaseModule,
     AuthModule,
     ProviderModule,
+    BillingModule,
+    CheckoutModule,
   ],
   controllers: [AppController],
   providers: [AppService],
