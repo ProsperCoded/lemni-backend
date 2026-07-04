@@ -1,0 +1,47 @@
+components:
+  schemas: {}
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  contact: {}
+  description: Deterministic, highly resilient backend infrastructure for the Lemni Payment-as-a-Service (PaaS) engine.
+  title: LEMNI PaaS Core Engine API
+  version: 1.0.0
+openapi: 3.0.0
+paths:
+  /:
+    get:
+      operationId: AppController_getHello
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      tags:
+        - App
+  /admin/api-keys/{id}:
+    delete:
+      description: Marks the specified API key as inactive immediately, blocking any subsequent API requests using it.
+      operationId: AuthController_revokeKey
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: API key successfully revoked
+        '401':
+          description: Unauthorized JWT session token
+        '404':
+          description: API key not found or does not belong to the merchant
+      security:
+        - bearer: []
+      summary: Revoke an API key
+      tags:
+        - admin/api-keys
+servers: []
+tags: []
