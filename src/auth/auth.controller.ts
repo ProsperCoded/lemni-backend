@@ -9,6 +9,7 @@ import {
   Request,
   NotFoundException,
   HttpCode,
+  UsePipes,
 } from '@nestjs/common';
 import type { Request as ExpressRequest } from 'express';
 import {
@@ -20,6 +21,9 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { SignupSchema, LoginSchema, ResetPasswordSchema } from './dto/auth.dto';
+import type { SignupDto, LoginDto, ResetPasswordDto } from './dto/auth.dto';
 
 @ApiTags('merchant-dashboard/auth')
 @Controller('auth')
@@ -78,7 +82,7 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Invalid input or weak password' })
   @ApiResponse({ status: 409, description: 'Email already registered' })
   async signup(
-    @Body() body: { email: string; password: string; name: string },
+    @Body() body: SignupDto,
   ) {
     return await this.authService.signup(body.email, body.password, body.name);
   }
@@ -138,7 +142,7 @@ export class AuthController {
     },
   })
   @ApiResponse({ status: 401, description: 'Invalid email or password' })
-  async login(@Body() body: { email: string; password: string }) {
+  async login(@Body() body: LoginDto) {
     return this.authService.login(body.email, body.password);
   }
 
@@ -258,7 +262,7 @@ export class AuthController {
     description: 'Invalid email, incorrect old password, or weak new password',
   })
   async resetPassword(
-    @Body() body: { email: string; oldPassword: string; newPassword: string },
+    @Body() body: ResetPasswordDto,
   ) {
     return this.authService.resetPassword(
       body.email,
