@@ -354,11 +354,10 @@ paths:
         - merchant-dashboard/billing
   /admin/plans/{planId}/checkout-link:
     get:
-      description: Generates a shareable checkout URL for a billing plan. Merchants can distribute this link to customers who can then initiate checkout.
+      description: Returns a shareable URL that merchants can distribute without a website. Customers click the link, enter their email, and are directed to payment. Useful for merchants without existing website integrations.
       operationId: BillingController_getCheckoutLink
       parameters:
-        - description: The billing plan ID
-          in: path
+        - in: path
           name: planId
           required: true
           schema:
@@ -370,16 +369,16 @@ paths:
               schema:
                 properties:
                   checkoutUrl:
-                    description: Shareable checkout URL for the plan
-                    example: http://localhost:5173/checkout/plan_xyz
+                    description: Shareable URL that customers can click to subscribe
+                    example: http://localhost:5173/checkout/plan_7a8dca9
                     format: uri
                     type: string
                   planId:
-                    description: The billing plan ID
-                    example: plan_xyz
+                    description: The plan ID embedded in the link
+                    example: plan_7a8dca9
                     type: string
                 type: object
-          description: Checkout link generated successfully
+          description: Shareable checkout link generated successfully
         '401':
           description: Unauthorized JWT session token
         '404':
@@ -394,16 +393,15 @@ paths:
           description: Plan not found
       security:
         - bearer: []
-      summary: Get shareable checkout link for a plan
+      summary: Generate shareable checkout link for a plan
       tags:
         - merchant-dashboard/billing
   /admin/plans/{planId}/checkout:
     post:
-      description: Generates a checkout session from a customer email for a specific billing plan. Called when a customer submits their email on the shareable checkout page.
-      operationId: BillingController_createCheckoutSession
+      description: Called by the dashboard frontend when a customer submits their email on the public checkout page. Generates a Nomba checkout session and returns the payment URL.
+      operationId: BillingController_createPublicCheckout
       parameters:
-        - description: The billing plan ID
-          in: path
+        - in: path
           name: planId
           required: true
           schema:
@@ -414,12 +412,12 @@ paths:
             schema:
               properties:
                 callbackUrl:
-                  description: Optional callback URL to redirect customer after successful payment
-                  example: https://mywebsite.com/success
+                  description: Optional redirect URL after successful payment
+                  example: https://mywebsite.com/sub-success
                   format: uri
                   type: string
                 email:
-                  description: Customer email address
+                  description: Customer email for subscription
                   example: customer@example.com
                   format: email
                   type: string
@@ -434,17 +432,17 @@ paths:
               schema:
                 properties:
                   checkoutUrl:
-                    description: URL to direct customer to for payment
-                    example: https://checkout.nomba.com/pay/mock_link_456
+                    description: Nomba checkout URL to redirect customer to
+                    example: https://checkout.nomba.com/pay/mock_link_123
                     format: uri
                     type: string
                   sessionId:
                     description: Unique session ID for tracking
-                    example: tx_9876543210fedcba
+                    example: tx_1234567890abcdef
                     type: string
                   subscriptionId:
                     description: Subscription created for this session
-                    example: sub_b39efdb0
+                    example: sub_a28deca9
                     type: string
                 type: object
           description: Checkout session generated successfully
@@ -454,12 +452,10 @@ paths:
               schema:
                 properties:
                   error:
-                    example: Invalid email format or plan configuration
+                    example: Invalid email format
                     type: string
                 type: object
-          description: Invalid input
-        '401':
-          description: Unauthorized JWT session token
+          description: Invalid input (email format, plan configuration, etc.)
         '404':
           content:
             application/json:
@@ -472,7 +468,7 @@ paths:
           description: Plan not found
       security:
         - bearer: []
-      summary: Create checkout session from customer email
+      summary: Generate checkout session for public plan link
       tags:
         - merchant-dashboard/billing
   /admin/subscriptions/{id}/reactivate:
