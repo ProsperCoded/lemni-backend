@@ -7,7 +7,7 @@ This document details the deterministic, highly resilient backend infrastructure
 * **Framework:** NestJS (Node.js/TypeScript). Enforces strict dependency injection and modular boundaries, essential for isolating third-party provider failures.  
 * **Database:** Turso (libSQL). Operating at the edge, providing ultra-low latency relational data storage. Connected via Drizzle ORM (using `@libsql/client`) to enforce strict schema validation and database actions.  
 * **Queue Engine:** BullMQ backed by Redis (Upstash/Render free tier). Handles distributed task scheduling, delayed retries, and rate-limiting.  
-* **Hosting Deployment:** Render Web Services.  
+* **Hosting Deployment:** Render Web Services. Live server URL: `https://lemni-backend.onrender.com`
 * **Contingency (Keep-Alive):** To bypass Render's 15-minute idle sleep on free tiers, an external cron service (e.g., UptimeRobot or GitHub Actions) will ping a lightweight GET /health endpoint every 10 minutes. This guarantees BullMQ workers and internal cron schedules never freeze.
 
 ## **2\. Module Segregation (NestJS Architecture)**

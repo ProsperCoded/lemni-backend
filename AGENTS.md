@@ -1,4 +1,5 @@
 # Agent Rules
+- Follow all agents instructions to the fullest, don't choose, if you are executing an agent follow it completely.
 
 - Always log critical application operations (e.g., transactions, webhooks, authentication) including their status for easier debugging.
 
