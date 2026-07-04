@@ -106,10 +106,16 @@ export class CheckoutService {
         transactionId,
         orderPayload,
       )) as Record<string, unknown>;
+      const responseData = response.data as Record<string, unknown>;
+
+      await this.db
+        .update(transactions)
+        .set({ nombaRef: responseData.orderReference as string })
+        .where(eq(transactions.id, transactionId));
+
       return {
         sessionId: transactionId,
-        checkoutUrl: (response.data as Record<string, unknown>)
-          .checkoutLink as string,
+        checkoutUrl: responseData.checkoutLink as string,
       };
     } catch (error) {
       await this.db
@@ -187,11 +193,17 @@ export class CheckoutService {
         transactionId,
         orderPayload,
       )) as Record<string, unknown>;
+      const responseData = response.data as Record<string, unknown>;
+
+      await this.db
+        .update(transactions)
+        .set({ nombaRef: responseData.orderReference as string })
+        .where(eq(transactions.id, transactionId));
+
       return {
         sessionId: transactionId,
         subscriptionId,
-        checkoutUrl: (response.data as Record<string, unknown>)
-          .checkoutLink as string,
+        checkoutUrl: responseData.checkoutLink as string,
       };
     } catch (error) {
       await this.db

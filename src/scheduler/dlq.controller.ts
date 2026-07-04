@@ -13,10 +13,12 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiParam,
+  ApiExcludeController,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DlqService } from './dlq.service';
 
+@ApiExcludeController()
 @ApiTags('merchant-dashboard/dlq')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
