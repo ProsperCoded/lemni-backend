@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
 import { NombaClient } from '../provider/nomba.client';
@@ -26,6 +27,7 @@ export class CheckoutService {
     @Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB,
     private readonly nombaClient: NombaClient,
     private readonly emailService: EmailService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -90,6 +92,9 @@ export class CheckoutService {
     );
 
     const transactionId = `tx_${crypto.randomBytes(12).toString('hex')}`;
+    const subAccountId = this.configService.get<string>(
+      'NOMBA_SUB_ACCOUNT_ID',
+    );
 
     // Nomba checkout order payload
     const orderPayload = {
@@ -100,6 +105,7 @@ export class CheckoutService {
         currency: 'NGN',
         customerEmail: customer.email,
         callbackUrl,
+        subAccountId,
       },
     };
 
@@ -195,6 +201,9 @@ export class CheckoutService {
     // requests Nomba to tokenize the card. The token arrives later via
     // the payment_success webhook (see webhook.service.ts) and is stored
     // on customers.nombaToken for use by DunningWorkerService.
+    const subAccountId = this.configService.get<string>(
+      'NOMBA_SUB_ACCOUNT_ID',
+    );
     const orderPayload = {
       order: {
         amount: plan.amount,
@@ -204,6 +213,7 @@ export class CheckoutService {
         customerEmail: customer.email,
         callbackUrl,
         allowedPaymentMethods: ['Card'],
+        subAccountId,
       },
       tokenizeCard: true,
     };
