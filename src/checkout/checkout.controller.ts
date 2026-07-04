@@ -76,16 +76,40 @@ export class CheckoutController {
     schema: {
       type: 'object',
       properties: {
-        sessionId: { type: 'string', example: 'tx_1234567890abcdef' },
+        sessionId: {
+          type: 'string',
+          example: 'tx_1234567890abcdef',
+          description: 'Unique transaction/session ID for tracking and polling status',
+        },
         checkoutUrl: {
           type: 'string',
           format: 'uri',
           example: 'https://checkout.nomba.com/pay/mock_link_123',
+          description: 'URL to direct customer to for payment',
         },
       },
     },
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized API key' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'Invalid amount or email format' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized API key',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'Unauthorized API key' },
+      },
+    },
+  })
   async createOneTimePayment(
     @Body() body: OneTimePaymentDto,
     @Request() req: AuthenticatedRequest,
@@ -136,18 +160,55 @@ export class CheckoutController {
     schema: {
       type: 'object',
       properties: {
-        sessionId: { type: 'string', example: 'tx_1234567890abcdef' },
-        subscriptionId: { type: 'string', example: 'sub_a28deca9' },
+        sessionId: {
+          type: 'string',
+          example: 'tx_1234567890abcdef',
+          description: 'Unique transaction/session ID',
+        },
+        subscriptionId: {
+          type: 'string',
+          example: 'sub_a28deca9',
+          description: 'Subscription created for this session',
+        },
         checkoutUrl: {
           type: 'string',
           format: 'uri',
           example: 'https://checkout.nomba.com/pay/mock_link_123',
+          description: 'URL to direct customer to for payment',
         },
       },
     },
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized API key' })
-  @ApiResponse({ status: 404, description: 'Plan not found' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'Invalid plan ID or email format' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized API key',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'Unauthorized API key' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Plan not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'Plan not found' },
+      },
+    },
+  })
   async createSubscriptionPayment(
     @Body() body: SubscriptionPaymentDto,
     @Request() req: AuthenticatedRequest,
@@ -175,23 +236,48 @@ export class CheckoutController {
     schema: {
       type: 'object',
       properties: {
-        sessionId: { type: 'string', example: 'tx_1234567890abcdef' },
-        amount: { type: 'number', format: 'float', example: 5000.0 },
+        sessionId: {
+          type: 'string',
+          example: 'tx_1234567890abcdef',
+          description: 'The session/transaction ID',
+        },
+        amount: {
+          type: 'number',
+          format: 'float',
+          example: 5000.0,
+          description: 'Transaction amount',
+        },
         status: {
           type: 'string',
           enum: ['pending', 'success', 'failed'],
           example: 'pending',
+          description: 'Current payment status',
         },
-        nombaRef: { type: 'string', nullable: true, example: 'ref_nomba_992c' },
+        nombaRef: {
+          type: 'string',
+          nullable: true,
+          example: 'ref_nomba_992c',
+          description: 'Reference from payment processor (null until payment is processed)',
+        },
         createdAt: {
           type: 'string',
           format: 'date-time',
           example: '2026-07-04T02:00:00.000Z',
+          description: 'Session creation timestamp',
         },
       },
     },
   })
-  @ApiResponse({ status: 404, description: 'Session not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Session not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'Session not found' },
+      },
+    },
+  })
   async getCheckoutSessionStatus(@Param('id') id: string) {
     return this.checkoutService.getCheckoutSessionStatus(id);
   }
@@ -221,21 +307,49 @@ export class CheckoutController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Checkout session generated',
+    description: 'Checkout session generated successfully',
     schema: {
       type: 'object',
       properties: {
-        sessionId: { type: 'string', example: 'tx_1234567890abcdef' },
-        subscriptionId: { type: 'string', example: 'sub_a28deca9' },
+        sessionId: {
+          type: 'string',
+          example: 'tx_1234567890abcdef',
+          description: 'Unique session ID for tracking',
+        },
+        subscriptionId: {
+          type: 'string',
+          example: 'sub_a28deca9',
+          description: 'Subscription created for this session',
+        },
         checkoutUrl: {
           type: 'string',
           format: 'uri',
           example: 'https://checkout.nomba.com/pay/mock_link_123',
+          description: 'URL to direct customer to for payment',
         },
       },
     },
   })
-  @ApiResponse({ status: 404, description: 'Plan not found' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'Invalid email format or plan configuration' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Plan not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'Plan not found' },
+      },
+    },
+  })
   async createPublicPlanSession(
     @Param('planId') planId: string,
     @Body() body: PublicPlanSessionDto,
@@ -245,16 +359,70 @@ export class CheckoutController {
 
   @Post('public/subscriptions/:id/unsubscribe/request')
   @HttpCode(HttpStatus.OK)
+  @ApiParam({
+    name: 'id',
+    description: 'The subscription ID',
+  })
   @ApiOperation({
     summary: 'Request email OTP to unsubscribe',
     description:
-      'Generates and sends a 6-digit OTP code to the subscription owner email.',
+      'Generates and sends a 6-digit OTP code to the subscription owner email to verify unsubscribe request.',
   })
-  @ApiResponse({ status: 200, description: 'Verification code sent' })
-  @ApiResponse({ status: 404, description: 'Subscription not found' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['email'],
+      properties: {
+        email: {
+          type: 'string',
+          format: 'email',
+          example: 'subscriber@test.com',
+          description: 'Email address associated with the subscription',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Verification code sent successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Verification code sent to subscriber@test.com',
+          description: 'Confirmation message',
+        },
+      },
+    },
+  })
   @ApiResponse({
     status: 403,
     description: 'Email does not match subscription owner',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'string',
+          example: 'Email does not match subscription owner',
+          description: 'Error message',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Subscription not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'string',
+          example: 'Subscription not found',
+          description: 'Error message',
+        },
+      },
+    },
   })
   async requestUnsubscribe(
     @Param('id') id: string,
@@ -265,19 +433,74 @@ export class CheckoutController {
 
   @Post('public/subscriptions/:id/unsubscribe/confirm')
   @HttpCode(HttpStatus.OK)
+  @ApiParam({
+    name: 'id',
+    description: 'The subscription ID',
+  })
   @ApiOperation({
     summary: 'Confirm unsubscribe with OTP',
-    description: 'Verifies the OTP code and cancels the subscription.',
+    description: 'Verifies the OTP code sent to the subscription owner email and cancels the subscription immediately.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['code'],
+      properties: {
+        code: {
+          type: 'string',
+          example: '123456',
+          description: '6-digit OTP code sent to email',
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 200,
     description: 'Subscription successfully canceled',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'boolean',
+          example: true,
+          description: 'Success flag',
+        },
+        message: {
+          type: 'string',
+          example: 'Subscription successfully canceled',
+          description: 'Confirmation message',
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 400,
     description: 'Invalid or expired code, or subscription already canceled',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'string',
+          example: 'Invalid or expired code, or subscription already canceled',
+          description: 'Error message',
+        },
+      },
+    },
   })
-  @ApiResponse({ status: 404, description: 'Subscription not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Subscription not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'string',
+          example: 'Subscription not found',
+          description: 'Error message',
+        },
+      },
+    },
+  })
   async confirmUnsubscribe(
     @Param('id') id: string,
     @Body() body: UnsubscribeConfirmDto,

@@ -263,12 +263,27 @@ export class AuthController {
       type: 'object',
       properties: {
         success: { type: 'boolean', example: true },
+        message: {
+          type: 'string',
+          example: 'Password successfully reset',
+          description: 'Confirmation message',
+        },
       },
     },
   })
   @ApiResponse({
     status: 400,
     description: 'Invalid email, incorrect old password, or weak new password',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'string',
+          example: 'Invalid email, incorrect old password, or weak new password (minimum 8 characters)',
+          description: 'Error message',
+        },
+      },
+    },
   })
   async resetPassword(@Body() body: ResetPasswordDto) {
     return this.authService.resetPassword(
@@ -319,9 +334,37 @@ export class AuthController {
     description:
       'Generates and sends a 6-digit OTP code to the merchant email.',
   })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['email'],
+      properties: {
+        email: {
+          type: 'string',
+          format: 'email',
+          example: 'acme@example.com',
+          description: 'Merchant email address',
+        },
+      },
+    },
+  })
   @ApiResponse({
     status: 200,
-    description: 'Reset code sent or email not found',
+    description: 'Reset code sent or email not found (for security, same message for both cases)',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Reset code sent to acme@example.com (or email not found)',
+          description: 'Confirmation message',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid email format',
   })
   async forgotPassword(@Body() body: ForgotPasswordDto) {
     return await this.authService.forgotPassword(body.email);
@@ -334,8 +377,53 @@ export class AuthController {
     description:
       'Validates the reset OTP code and returns a short-lived reset token.',
   })
-  @ApiResponse({ status: 200, description: 'OTP verified successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid or expired OTP' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['email', 'code'],
+      properties: {
+        email: {
+          type: 'string',
+          format: 'email',
+          example: 'acme@example.com',
+          description: 'Merchant email address',
+        },
+        code: {
+          type: 'string',
+          example: '123456',
+          description: '6-digit OTP code sent to email',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP verified successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        resetToken: {
+          type: 'string',
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+          description: 'Short-lived token for password reset (valid for 15 minutes)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid or expired OTP',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'string',
+          example: 'Invalid or expired OTP',
+          description: 'Error message',
+        },
+      },
+    },
+  })
   async verifyResetOtp(@Body() body: VerifyResetOtpDto) {
     return await this.authService.verifyResetOtp(body.email, body.code);
   }
@@ -344,12 +432,60 @@ export class AuthController {
   @HttpCode(200)
   @ApiOperation({
     summary: 'Reset password using token',
-    description: 'Resets the password utilizing the short-lived reset token.',
+    description: 'Resets the password utilizing the short-lived reset token obtained from OTP verification.',
   })
-  @ApiResponse({ status: 200, description: 'Password reset successfully' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['token', 'newPassword'],
+      properties: {
+        token: {
+          type: 'string',
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+          description: 'Reset token from verify-reset-otp response (valid for 15 minutes)',
+        },
+        newPassword: {
+          type: 'string',
+          format: 'password',
+          example: 'NewSecurePassword123',
+          minLength: 8,
+          description: 'New password (minimum 8 characters)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Password reset successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'boolean',
+          example: true,
+          description: 'Success flag',
+        },
+        message: {
+          type: 'string',
+          example: 'Password reset successfully',
+          description: 'Confirmation message',
+        },
+      },
+    },
+  })
   @ApiResponse({
     status: 400,
     description: 'Invalid/expired token or password criteria not met',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'string',
+          example: 'Invalid or expired token, or password does not meet requirements (minimum 8 characters)',
+          description: 'Error message',
+        },
+      },
+    },
   })
   async resetPasswordWithToken(@Body() body: ResetPasswordWithTokenDto) {
     return await this.authService.resetPasswordWithToken(

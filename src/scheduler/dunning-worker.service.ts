@@ -57,6 +57,15 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
+    // Do NOT start BullMQ workers in test environment — they run in background
+    // and process real jobs, contaminating shared DB state between test suites.
+    if (process.env.NODE_ENV === 'test') {
+      this.logger.warn(
+        '[DunningWorker] Skipping worker startup in test environment',
+      );
+      return;
+    }
+
     const redisUrl = this.configService.get<string>('REDIS_URL')!;
     const connection = { url: redisUrl };
 

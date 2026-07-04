@@ -116,9 +116,27 @@ export class BillingController {
   @ApiResponse({
     status: 400,
     description: 'Cannot delete plan due to active subscriptions',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'string',
+          example: 'Cannot delete plan due to active or trialing subscriptions',
+        },
+      },
+    },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized JWT session token' })
-  @ApiResponse({ status: 404, description: 'Plan not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Plan not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'Plan not found' },
+      },
+    },
+  })
   async deletePlan(@Param('id') id: string, @Request() req: ExpressRequest) {
     const merchantId = (req.user as Record<string, unknown>)
       .merchantId as string;
@@ -221,11 +239,29 @@ export class BillingController {
   @ApiResponse({
     status: 400,
     description: 'Subscription is not canceled or card is missing',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'string',
+          example: 'Subscription is not in canceled status or payment method is missing',
+        },
+      },
+    },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized JWT session token' })
   @ApiResponse({
     status: 404,
     description: 'Subscription or associated plan not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'string',
+          example: 'Subscription or associated plan not found',
+        },
+      },
+    },
   })
   async reactivateSubscription(
     @Param('id') id: string,

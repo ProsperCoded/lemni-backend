@@ -14,11 +14,21 @@ openapi: 3.0.0
 paths:
   /:
     get:
+      description: Returns server status. Use this to verify the API is running and accessible.
       operationId: AppController_getHello
       parameters: []
       responses:
         '200':
-          description: ''
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    example: Hello from Lemni PaaS
+                    type: string
+                type: object
+          description: Server is healthy and running
+      summary: Health check
       tags:
         - developer-apis/health
   /admin/api-keys:
@@ -316,10 +326,26 @@ paths:
         '204':
           description: Plan successfully deleted
         '400':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Cannot delete plan due to active or trialing subscriptions
+                    type: string
+                type: object
           description: Cannot delete plan due to active subscriptions
         '401':
           description: Unauthorized JWT session token
         '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Plan not found
+                    type: string
+                type: object
           description: Plan not found
       security:
         - bearer: []
@@ -370,10 +396,26 @@ paths:
                 type: object
           description: Subscription successfully reactivated
         '400':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Subscription is not in canceled status or payment method is missing
+                    type: string
+                type: object
           description: Subscription is not canceled or card is missing
         '401':
           description: Unauthorized JWT session token
         '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Subscription or associated plan not found
+                    type: string
+                type: object
           description: Subscription or associated plan not found
       security:
         - bearer: []
@@ -446,12 +488,27 @@ paths:
         - merchant-dashboard/billing
   /api/v1/admin/telegram/disconnect:
     delete:
-      description: Clears the Telegram chat ID for the authenticated merchant
+      description: >-
+        Clears the Telegram chat ID for the authenticated merchant. After disconnection, the merchant will no longer
+        receive Telegram notifications.
       operationId: NotificationController_disconnectTelegram
       parameters: []
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    example: Telegram disconnected successfully
+                    type: string
+                  success:
+                    example: true
+                    type: boolean
+                type: object
           description: Telegram disconnected successfully
+        '401':
+          description: Missing or invalid access token
       security:
         - bearer: []
       summary: Disconnect Telegram (merchant dashboard)
@@ -459,7 +516,9 @@ paths:
         - merchant-dashboard/notifications
   /api/v1/admin/telegram/status:
     get:
-      description: Returns whether Telegram is connected for the merchant
+      description: >-
+        Returns whether Telegram is connected for the merchant and the connection timestamp. The chat ID is partially
+        masked for security.
       operationId: NotificationController_getTelegramStatus
       parameters: []
       responses:
@@ -469,14 +528,23 @@ paths:
               schema:
                 properties:
                   chatId:
+                    description: Partially masked Telegram chat ID (first 4 and last 4 characters visible)
+                    example: 1234...5678
                     nullable: true
                     type: string
                   connected:
+                    description: Whether Telegram is currently connected
+                    example: true
                     type: boolean
                   connectedAt:
+                    description: Timestamp when Telegram was connected (ISO 8601 format)
+                    example: '2026-07-04T10:00:00.000Z'
                     nullable: true
                     type: string
-          description: Telegram connection status
+                type: object
+          description: Telegram connection status retrieved successfully
+        '401':
+          description: Missing or invalid access token
       security:
         - bearer: []
       summary: Check Telegram connection status
@@ -517,18 +585,39 @@ paths:
               schema:
                 properties:
                   checkoutUrl:
+                    description: URL to direct customer to for payment
                     example: https://checkout.nomba.com/pay/mock_link_123
                     format: uri
                     type: string
                   sessionId:
+                    description: Unique session ID for tracking
                     example: tx_1234567890abcdef
                     type: string
                   subscriptionId:
+                    description: Subscription created for this session
                     example: sub_a28deca9
                     type: string
                 type: object
-          description: Checkout session generated
+          description: Checkout session generated successfully
+        '400':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Invalid email format or plan configuration
+                    type: string
+                type: object
+          description: Invalid input
         '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Plan not found
+                    type: string
+                type: object
           description: Plan not found
       summary: Generate public plan checkout session
       tags:
@@ -573,55 +662,162 @@ paths:
               schema:
                 properties:
                   checkoutUrl:
+                    description: URL to direct customer to for payment
                     example: https://checkout.nomba.com/pay/mock_link_123
                     format: uri
                     type: string
                   sessionId:
+                    description: Unique transaction/session ID for tracking and polling status
                     example: tx_1234567890abcdef
                     type: string
                 type: object
           description: Checkout session successfully created
+        '400':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Invalid amount or email format
+                    type: string
+                type: object
+          description: Invalid input
         '401':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Unauthorized API key
+                    type: string
+                type: object
           description: Unauthorized API key
       summary: Create a one-time checkout session
       tags:
         - developer-apis/checkout
   /api/v1/public/subscriptions/{id}/unsubscribe/confirm:
     post:
-      description: Verifies the OTP code and cancels the subscription.
+      description: Verifies the OTP code sent to the subscription owner email and cancels the subscription immediately.
       operationId: CheckoutController_confirmUnsubscribe
       parameters:
-        - in: path
+        - description: The subscription ID
+          in: path
           name: id
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                code:
+                  description: 6-digit OTP code sent to email
+                  example: '123456'
+                  type: string
+              required:
+                - code
+              type: object
+        required: true
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    description: Confirmation message
+                    example: Subscription successfully canceled
+                    type: string
+                  success:
+                    description: Success flag
+                    example: true
+                    type: boolean
+                type: object
           description: Subscription successfully canceled
         '400':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Invalid or expired code, or subscription already canceled
+                    type: string
+                type: object
           description: Invalid or expired code, or subscription already canceled
         '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Subscription not found
+                    type: string
+                type: object
           description: Subscription not found
       summary: Confirm unsubscribe with OTP
       tags:
         - developer-apis/checkout
   /api/v1/public/subscriptions/{id}/unsubscribe/request:
     post:
-      description: Generates and sends a 6-digit OTP code to the subscription owner email.
+      description: Generates and sends a 6-digit OTP code to the subscription owner email to verify unsubscribe request.
       operationId: CheckoutController_requestUnsubscribe
       parameters:
-        - in: path
+        - description: The subscription ID
+          in: path
           name: id
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                email:
+                  description: Email address associated with the subscription
+                  example: subscriber@test.com
+                  format: email
+                  type: string
+              required:
+                - email
+              type: object
+        required: true
       responses:
         '200':
-          description: Verification code sent
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    description: Confirmation message
+                    example: Verification code sent to subscriber@test.com
+                    type: string
+                type: object
+          description: Verification code sent successfully
         '403':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Email does not match subscription owner
+                    type: string
+                type: object
           description: Email does not match subscription owner
         '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Subscription not found
+                    type: string
+                type: object
           description: Subscription not found
       summary: Request email OTP to unsubscribe
       tags:
@@ -644,21 +840,26 @@ paths:
               schema:
                 properties:
                   amount:
+                    description: Transaction amount
                     example: 5000
                     format: float
                     type: number
                   createdAt:
+                    description: Session creation timestamp
                     example: '2026-07-04T02:00:00.000Z'
                     format: date-time
                     type: string
                   nombaRef:
+                    description: Reference from payment processor (null until payment is processed)
                     example: ref_nomba_992c
                     nullable: true
                     type: string
                   sessionId:
+                    description: The session/transaction ID
                     example: tx_1234567890abcdef
                     type: string
                   status:
+                    description: Current payment status
                     enum:
                       - pending
                       - success
@@ -668,6 +869,14 @@ paths:
                 type: object
           description: Session status retrieved successfully
         '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Session not found
+                    type: string
+                type: object
           description: Session not found
       summary: Poll checkout session status
       tags:
@@ -711,20 +920,49 @@ paths:
               schema:
                 properties:
                   checkoutUrl:
+                    description: URL to direct customer to for payment
                     example: https://checkout.nomba.com/pay/mock_link_123
                     format: uri
                     type: string
                   sessionId:
+                    description: Unique transaction/session ID
                     example: tx_1234567890abcdef
                     type: string
                   subscriptionId:
+                    description: Subscription created for this session
                     example: sub_a28deca9
                     type: string
                 type: object
           description: Checkout session successfully created
+        '400':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Invalid plan ID or email format
+                    type: string
+                type: object
+          description: Invalid input
         '401':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Unauthorized API key
+                    type: string
+                type: object
           description: Unauthorized API key
         '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Plan not found
+                    type: string
+                type: object
           description: Plan not found
       summary: Create a subscription checkout session
       tags:
@@ -745,9 +983,34 @@ paths:
       description: Generates and sends a 6-digit OTP code to the merchant email.
       operationId: AuthController_forgotPassword
       parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                email:
+                  description: Merchant email address
+                  example: acme@example.com
+                  format: email
+                  type: string
+              required:
+                - email
+              type: object
+        required: true
       responses:
         '200':
-          description: Reset code sent or email not found
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    description: Confirmation message
+                    example: Reset code sent to acme@example.com (or email not found)
+                    type: string
+                type: object
+          description: Reset code sent or email not found (for security, same message for both cases)
+        '400':
+          description: Invalid email format
       summary: Request password reset verification code
       tags:
         - merchant-dashboard/auth
@@ -910,12 +1173,25 @@ paths:
             application/json:
               schema:
                 properties:
+                  message:
+                    description: Confirmation message
+                    example: Password successfully reset
+                    type: string
                   success:
                     example: true
                     type: boolean
                 type: object
           description: Password successfully reset
         '400':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Invalid email, incorrect old password, or weak new password (minimum 8 characters)
+                    type: string
+                type: object
           description: Invalid email, incorrect old password, or weak new password
       summary: Reset password using old password verification
       tags:
@@ -923,13 +1199,55 @@ paths:
         - merchant-dashboard/auth
   /auth/reset-password-with-token:
     post:
-      description: Resets the password utilizing the short-lived reset token.
+      description: Resets the password utilizing the short-lived reset token obtained from OTP verification.
       operationId: AuthController_resetPasswordWithToken
       parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                newPassword:
+                  description: New password (minimum 8 characters)
+                  example: NewSecurePassword123
+                  format: password
+                  minLength: 8
+                  type: string
+                token:
+                  description: Reset token from verify-reset-otp response (valid for 15 minutes)
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  type: string
+              required:
+                - token
+                - newPassword
+              type: object
+        required: true
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    description: Confirmation message
+                    example: Password reset successfully
+                    type: string
+                  success:
+                    description: Success flag
+                    example: true
+                    type: boolean
+                type: object
           description: Password reset successfully
         '400':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Invalid or expired token, or password does not meet requirements (minimum 8 characters)
+                    type: string
+                type: object
           description: Invalid/expired token or password criteria not met
       summary: Reset password using token
       tags:
@@ -1031,21 +1349,80 @@ paths:
       description: Validates the reset OTP code and returns a short-lived reset token.
       operationId: AuthController_verifyResetOtp
       parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                code:
+                  description: 6-digit OTP code sent to email
+                  example: '123456'
+                  type: string
+                email:
+                  description: Merchant email address
+                  example: acme@example.com
+                  format: email
+                  type: string
+              required:
+                - email
+                - code
+              type: object
+        required: true
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  resetToken:
+                    description: Short-lived token for password reset (valid for 15 minutes)
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    type: string
+                type: object
           description: OTP verified successfully
         '400':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Invalid or expired OTP
+                    type: string
+                type: object
           description: Invalid or expired OTP
       summary: Verify password reset OTP
       tags:
         - merchant-dashboard/auth
   /test-api-key:
     get:
+      description: >-
+        Verifies that the provided API key in the Authorization header is valid and authorized. Use this to test your
+        API key configuration.
       operationId: AppController_testApiKey
       parameters: []
       responses:
         '200':
-          description: ''
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    example: authorized
+                    type: string
+                type: object
+          description: API key is valid and authorized
+        '401':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    example: Unauthorized
+                    type: string
+                type: object
+          description: Missing, invalid, or revoked API key
+      summary: Test API key validity
       tags:
         - developer-apis/health
 servers: []

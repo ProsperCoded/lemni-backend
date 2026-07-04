@@ -47,11 +47,25 @@ export class NotificationController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Disconnect Telegram (merchant dashboard)',
-    description: 'Clears the Telegram chat ID for the authenticated merchant',
+    description: 'Clears the Telegram chat ID for the authenticated merchant. After disconnection, the merchant will no longer receive Telegram notifications.',
   })
   @ApiResponse({
     status: 200,
     description: 'Telegram disconnected successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: {
+          type: 'string',
+          example: 'Telegram disconnected successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid access token',
   })
   async disconnectTelegram(
     @Request() req: ExpressRequest,
@@ -82,18 +96,37 @@ export class NotificationController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Check Telegram connection status',
-    description: 'Returns whether Telegram is connected for the merchant',
+    description: 'Returns whether Telegram is connected for the merchant and the connection timestamp. The chat ID is partially masked for security.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Telegram connection status',
+    description: 'Telegram connection status retrieved successfully',
     schema: {
+      type: 'object',
       properties: {
-        connected: { type: 'boolean' },
-        connectedAt: { type: 'string', nullable: true },
-        chatId: { type: 'string', nullable: true },
+        connected: {
+          type: 'boolean',
+          description: 'Whether Telegram is currently connected',
+          example: true,
+        },
+        connectedAt: {
+          type: 'string',
+          nullable: true,
+          description: 'Timestamp when Telegram was connected (ISO 8601 format)',
+          example: '2026-07-04T10:00:00.000Z',
+        },
+        chatId: {
+          type: 'string',
+          nullable: true,
+          description: 'Partially masked Telegram chat ID (first 4 and last 4 characters visible)',
+          example: '1234...5678',
+        },
       },
     },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid access token',
   })
   async getTelegramStatus(
     @Request() req: ExpressRequest,
