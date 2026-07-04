@@ -145,3 +145,4 @@ vite.config.ts.timestamp-*
 .agents
 .claude
 CLAUDE.md
+temp/
