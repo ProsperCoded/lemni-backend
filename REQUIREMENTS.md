@@ -27,10 +27,10 @@ This document outlines the sequential, step-by-step implementation tasks for the
 ---
 
 ## 2. SECURITY & AUTHENTICATION (AuthModule)
-- [ ] **2.1. API Key Generation & Hashing Logic**
+- [x] **2.1. API Key Generation & Hashing Logic**
   - Build service method to generate a cryptographically secure random API key.
   - Implement bcrypt/Argon2 hashing for storing keys securely in the `ApiKey` table.
-- [ ] **2.2. API Key Authentication Guard**
+- [x] **2.2. API Key Authentication Guard**
   - Implement `ApiKeyGuard` validating the `Authorization: Bearer <API_KEY>` header against hashed database records.
   - Enforce check for the `environment` (test/live) and `is_active` status of the key.
   - **Unhappy paths:**
@@ -38,13 +38,13 @@ This document outlines the sequential, step-by-step implementation tasks for the
     - Key not found in DB or hash mismatch → return `401 Unauthorized` with `INVALID_API_KEY` code.
     - Key found but `is_active = false` (revoked) → return `403 Forbidden` with `REVOKED_API_KEY` code.
     - Key environment mismatch (e.g. live key against test route) → return `403 Forbidden` with `ENVIRONMENT_MISMATCH` code.
-- [ ] **2.3. JWT Authentication Guard**
+- [x] **2.3. JWT Authentication Guard**
   - Configure JWT module and strategy for merchant dashboard administrative endpoints (`/admin/*`).
   - Implement `JwtAuthGuard` protecting these administrative endpoints.
   - **Unhappy paths:**
     - Expired JWT → return `401 Unauthorized` with `TOKEN_EXPIRED` code.
     - Tampered/invalid JWT signature → return `401 Unauthorized` with `INVALID_TOKEN` code.
-- [ ] **2.4. API Key Revocation Endpoint**
+- [x] **2.4. API Key Revocation Endpoint**
   - Implement `DELETE /admin/api-keys/:id` to set `is_active = false` for a given key.
   - Ensure in-flight requests with that key are rejected by the guard immediately (stateless check on every request).
 
