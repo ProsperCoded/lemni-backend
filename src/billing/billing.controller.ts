@@ -12,6 +12,7 @@ import {
   Get,
   Query,
 } from '@nestjs/common';
+import { Public } from '../auth/decorators/public.decorator';
 import type { Request as ExpressRequest } from 'express';
 import {
   ApiTags,
@@ -40,7 +41,7 @@ import type { PublicPlanSessionDto, UnsubscribeRequestDto, UnsubscribeConfirmDto
 @ApiTags('merchant-dashboard/billing')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller('admin')
+@Controller('admin/billing')
 export class BillingController {
   constructor(private readonly billingService: BillingService) {}
 
@@ -463,6 +464,7 @@ export class BillingController {
   }
 
   @Post('subscriptions/:id/unsubscribe/request')
+  @Public()
   @HttpCode(HttpStatus.OK)
   @UsePipes(new ZodValidationPipe(UnsubscribeRequestSchema))
   @ApiParam({

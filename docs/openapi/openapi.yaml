@@ -161,7 +161,7 @@ paths:
       summary: Revoke an API key
       tags:
         - merchant-dashboard/api-keys
-  /admin/customers:
+  /admin/billing/customers:
     post:
       description: Registers a customer under the current merchant, preparing them for subscription charges.
       operationId: BillingController_registerCustomer
@@ -218,7 +218,7 @@ paths:
       summary: Register a customer
       tags:
         - merchant-dashboard/billing
-  /admin/plans:
+  /admin/billing/plans:
     post:
       description: Registers a new recurring or one-time subscription plan in the system.
       operationId: BillingController_createPlan
@@ -312,7 +312,7 @@ paths:
       summary: Create a billing plan
       tags:
         - merchant-dashboard/billing
-  /admin/plans/{id}:
+  /admin/billing/plans/{id}:
     delete:
       description: Removes a subscription plan if no active or trialing customers are attached to it.
       operationId: BillingController_deletePlan
@@ -352,7 +352,7 @@ paths:
       summary: Delete a billing plan
       tags:
         - merchant-dashboard/billing
-  /admin/plans/{planId}/checkout:
+  /admin/billing/plans/{planId}/checkout:
     post:
       description: >-
         Called by the dashboard frontend when a customer submits their email on the public checkout page. Generates a
@@ -429,7 +429,7 @@ paths:
       summary: Generate checkout session for public plan link (public)
       tags:
         - merchant-dashboard/billing
-  /admin/plans/{planId}/checkout-link:
+  /admin/billing/plans/{planId}/checkout-link:
     get:
       description: >-
         Returns a shareable URL that merchants can distribute without a website. Customers click the link, enter their
@@ -475,7 +475,7 @@ paths:
       summary: Generate shareable checkout link for a plan
       tags:
         - merchant-dashboard/billing
-  /admin/subscriptions/{id}/reactivate:
+  /admin/billing/subscriptions/{id}/reactivate:
     post:
       description: Resets the billing cycle start date and shifts the subscription back to active status.
       operationId: BillingController_reactivateSubscription
@@ -545,7 +545,7 @@ paths:
       summary: Reactivate a canceled subscription
       tags:
         - merchant-dashboard/billing
-  /admin/subscriptions/{id}/unsubscribe/confirm:
+  /admin/billing/subscriptions/{id}/unsubscribe/confirm:
     post:
       description: Verifies the OTP code sent to the subscription owner email and cancels the subscription immediately.
       operationId: BillingController_confirmUnsubscribe
@@ -612,7 +612,7 @@ paths:
       summary: Confirm unsubscribe with OTP (public)
       tags:
         - merchant-dashboard/billing
-  /admin/subscriptions/{id}/unsubscribe/request:
+  /admin/billing/subscriptions/{id}/unsubscribe/request:
     post:
       description: >-
         Generates and sends a 6-digit OTP code to the subscription owner email to verify unsubscribe request.
@@ -678,7 +678,7 @@ paths:
       summary: Request email OTP to unsubscribe (public)
       tags:
         - merchant-dashboard/billing
-  /admin/transactions:
+  /admin/billing/transactions:
     get:
       description: Returns a paginated list of all transactions belonging to the authenticated merchant with filtering support.
       operationId: BillingController_getTransactions
@@ -806,78 +806,6 @@ paths:
       summary: Check Telegram connection status
       tags:
         - merchant-dashboard/notifications
-  /api/v1/checkout/plans/{planId}/sessions:
-    post:
-      description: Allows off-the-shelf payment links to initialize checkout sessions for customer emails.
-      operationId: CheckoutController_createPublicPlanSession
-      parameters:
-        - description: The static pricing plan ID
-          in: path
-          name: planId
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              properties:
-                callbackUrl:
-                  example: https://mywebsite.com/public-success
-                  format: uri
-                  type: string
-                email:
-                  example: buyer@gmail.com
-                  format: email
-                  type: string
-              required:
-                - email
-              type: object
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                properties:
-                  checkoutUrl:
-                    description: URL to direct customer to for payment
-                    example: https://checkout.nomba.com/pay/mock_link_123
-                    format: uri
-                    type: string
-                  sessionId:
-                    description: Unique session ID for tracking
-                    example: tx_1234567890abcdef
-                    type: string
-                  subscriptionId:
-                    description: Subscription created for this session
-                    example: sub_a28deca9
-                    type: string
-                type: object
-          description: Checkout session generated successfully
-        '400':
-          content:
-            application/json:
-              schema:
-                properties:
-                  error:
-                    example: Invalid email format or plan configuration
-                    type: string
-                type: object
-          description: Invalid input
-        '404':
-          content:
-            application/json:
-              schema:
-                properties:
-                  error:
-                    example: Plan not found
-                    type: string
-                type: object
-          description: Plan not found
-      summary: Generate public plan checkout session
-      tags:
-        - developer-apis/checkout
   /api/v1/pay:
     post:
       description: Generates a payment URL for a singular checkout charge.
@@ -949,133 +877,6 @@ paths:
                 type: object
           description: Unauthorized API key
       summary: Create a one-time checkout session
-      tags:
-        - developer-apis/checkout
-  /api/v1/public/subscriptions/{id}/unsubscribe/confirm:
-    post:
-      description: Verifies the OTP code sent to the subscription owner email and cancels the subscription immediately.
-      operationId: CheckoutController_confirmUnsubscribe
-      parameters:
-        - description: The subscription ID
-          in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              properties:
-                code:
-                  description: 6-digit OTP code sent to email
-                  example: '123456'
-                  type: string
-              required:
-                - code
-              type: object
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                properties:
-                  message:
-                    description: Confirmation message
-                    example: Subscription successfully canceled
-                    type: string
-                  success:
-                    description: Success flag
-                    example: true
-                    type: boolean
-                type: object
-          description: Subscription successfully canceled
-        '400':
-          content:
-            application/json:
-              schema:
-                properties:
-                  error:
-                    description: Error message
-                    example: Invalid or expired code, or subscription already canceled
-                    type: string
-                type: object
-          description: Invalid or expired code, or subscription already canceled
-        '404':
-          content:
-            application/json:
-              schema:
-                properties:
-                  error:
-                    description: Error message
-                    example: Subscription not found
-                    type: string
-                type: object
-          description: Subscription not found
-      summary: Confirm unsubscribe with OTP
-      tags:
-        - developer-apis/checkout
-  /api/v1/public/subscriptions/{id}/unsubscribe/request:
-    post:
-      description: Generates and sends a 6-digit OTP code to the subscription owner email to verify unsubscribe request.
-      operationId: CheckoutController_requestUnsubscribe
-      parameters:
-        - description: The subscription ID
-          in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              properties:
-                email:
-                  description: Email address associated with the subscription
-                  example: subscriber@test.com
-                  format: email
-                  type: string
-              required:
-                - email
-              type: object
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                properties:
-                  message:
-                    description: Confirmation message
-                    example: Verification code sent to subscriber@test.com
-                    type: string
-                type: object
-          description: Verification code sent successfully
-        '403':
-          content:
-            application/json:
-              schema:
-                properties:
-                  error:
-                    description: Error message
-                    example: Email does not match subscription owner
-                    type: string
-                type: object
-          description: Email does not match subscription owner
-        '404':
-          content:
-            application/json:
-              schema:
-                properties:
-                  error:
-                    description: Error message
-                    example: Subscription not found
-                    type: string
-                type: object
-          description: Subscription not found
-      summary: Request email OTP to unsubscribe
       tags:
         - developer-apis/checkout
   /api/v1/sessions/{id}/status:
