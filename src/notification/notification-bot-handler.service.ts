@@ -28,61 +28,89 @@ export class NotificationBotHandlerService {
     }
 
     const parts = text.split(/\s+/);
-    const merchantParam = parts[1];
+    const merchantUsername = parts[1];
 
-    if (!merchantParam || !merchantParam.startsWith('merchant_')) {
-      await this.telegramClient.sendMessage(
-        chatId,
-        '❌ Invalid merchant link. Please use the connection link from your Lemni dashboard.',
-      );
+    if (!merchantUsername) {
+      try {
+        await this.telegramClient.sendMessage(
+          chatId,
+          '❌ Invalid merchant link. Please use the connection link from your Lemni dashboard.',
+        );
+      } catch (error) {
+        this.logger.warn(
+          `[BotHandler] Failed to send error message for missing username: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
       return;
     }
-
-    const merchantId = merchantParam;
 
     try {
       const [merchant] = await this.db
         .select()
         .from(merchants)
-        .where(eq(merchants.id, merchantId));
+        .where(eq(merchants.username, merchantUsername));
 
       if (!merchant) {
-        await this.telegramClient.sendMessage(
-          chatId,
-          '❌ Merchant account not found. Please verify the link is correct.',
-        );
+        try {
+          await this.telegramClient.sendMessage(
+            chatId,
+            '❌ Merchant account not found. Please verify the link is correct.',
+          );
+        } catch (error) {
+          this.logger.warn(
+            `[BotHandler] Failed to send merchant-not-found message: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
         return;
       }
 
       if (merchant.telegramChatId && merchant.telegramChatId !== chatId) {
-        await this.telegramClient.sendMessage(
-          chatId,
-          '⚠️ Telegram is already connected to this account from a different chat. Reconnecting...',
-        );
+        try {
+          await this.telegramClient.sendMessage(
+            chatId,
+            '⚠️ Telegram is already connected to this account from a different chat. Reconnecting...',
+          );
+        } catch (error) {
+          this.logger.warn(
+            `[BotHandler] Failed to send reconnect warning: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       }
 
       await this.db
         .update(merchants)
         .set({ telegramChatId: chatId })
-        .where(eq(merchants.id, merchantId));
+        .where(eq(merchants.id, merchant.id));
 
-      await this.telegramClient.sendMessage(
-        chatId,
-        '✅ <b>Lemni Connected!</b>\n\nYou will now receive payment notifications in this chat.',
-      );
+      try {
+        await this.telegramClient.sendMessage(
+          chatId,
+          '✅ <b>Lemni Connected!</b>\n\nYou will now receive payment notifications in this chat.',
+        );
+      } catch (error) {
+        this.logger.warn(
+          `[BotHandler] Failed to send success message: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
 
       this.logger.log(
-        `[BotHandler] Telegram connected for merchant ${merchantId} (chat_id: ${chatId})`,
+        `[BotHandler] Telegram connected for merchant ${merchantUsername} (merchant_id: ${merchant.id}, chat_id: ${chatId})`,
       );
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
       this.logger.error(
-        `[BotHandler] Error handling /start for merchant ${merchantId}: ${msg}`,
+        `[BotHandler] Error handling /start for merchant ${merchantUsername}: ${msg}`,
       );
-      await this.telegramClient.sendMessage(
-        chatId,
-        '❌ An error occurred while connecting. Please try again later.',
-      );
+      try {
+        await this.telegramClient.sendMessage(
+          chatId,
+          '❌ An error occurred while connecting. Please try again later.',
+        );
+      } catch (sendError) {
+        this.logger.warn(
+          `[BotHandler] Failed to send error message: ${sendError instanceof Error ? sendError.message : String(sendError)}`,
+        );
+      }
     }
   }
 }

@@ -13,6 +13,8 @@ import {
   subscriptions,
   customers,
   plans,
+  otpVerifications,
+  dlqJobs,
 } from './../src/database/schema';
 import { eq } from 'drizzle-orm';
 
@@ -45,7 +47,9 @@ describe('Notification Module (e2e)', () => {
     db = moduleFixture.get(DRIZZLE_PROVIDER);
     jwtService = moduleFixture.get(JwtService);
 
-    // Clean and seed test merchant
+    // Clean ALL tables in FK order before seeding
+    await db.delete(otpVerifications);
+    await db.delete(dlqJobs);
     await db.delete(apiKeys);
     await db.delete(transactions);
     await db.delete(subscriptions);
@@ -63,6 +67,8 @@ describe('Notification Module (e2e)', () => {
   });
 
   afterAll(async () => {
+    await db.delete(otpVerifications);
+    await db.delete(dlqJobs);
     await db.delete(apiKeys);
     await db.delete(transactions);
     await db.delete(subscriptions);

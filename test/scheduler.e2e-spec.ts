@@ -11,6 +11,9 @@ import {
   customers,
   subscriptions,
   dlqJobs,
+  transactions,
+  apiKeys,
+  otpVerifications,
 } from '../src/database/schema';
 import { BillingWorkerService } from '../src/scheduler/billing-worker.service';
 import { CHARGE_QUEUE_TOKEN } from '../src/scheduler/scheduler.constants';
@@ -47,9 +50,12 @@ describe('Scheduler Module (e2e)', () => {
     chargeQueue = moduleFixture.get<Queue>(CHARGE_QUEUE_TOKEN);
     const jwtService = moduleFixture.get<JwtService>(JwtService);
 
-    // Seed merchant
+    // Clean ALL tables in FK order before seeding
+    await db.delete(otpVerifications);
     await db.delete(dlqJobs);
+    await db.delete(transactions);
     await db.delete(subscriptions);
+    await db.delete(apiKeys);
     await db.delete(customers);
     await db.delete(plans);
     await db.delete(merchants);
@@ -62,8 +68,11 @@ describe('Scheduler Module (e2e)', () => {
   });
 
   afterAll(async () => {
+    await db.delete(otpVerifications);
     await db.delete(dlqJobs);
+    await db.delete(transactions);
     await db.delete(subscriptions);
+    await db.delete(apiKeys);
     await db.delete(customers);
     await db.delete(plans);
     await db.delete(merchants);

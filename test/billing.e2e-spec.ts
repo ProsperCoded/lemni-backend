@@ -10,6 +10,9 @@ import {
   customers,
   subscriptions,
   transactions,
+  otpVerifications,
+  dlqJobs,
+  apiKeys,
 } from './../src/database/schema';
 import { ProrationService } from './../src/billing/proration.service';
 import { BillingService } from './../src/billing/billing.service';
@@ -45,9 +48,12 @@ describe('Billing & Domain Logic (e2e)', () => {
     billingService = moduleFixture.get(BillingService);
     jwtService = moduleFixture.get(JwtService);
 
-    // Clean tables and seed test merchant
+    // Clean ALL tables in FK order before seeding
+    await db.delete(otpVerifications);
+    await db.delete(dlqJobs);
     await db.delete(transactions);
     await db.delete(subscriptions);
+    await db.delete(apiKeys);
     await db.delete(customers);
     await db.delete(plans);
     await db.delete(merchants);
@@ -61,8 +67,11 @@ describe('Billing & Domain Logic (e2e)', () => {
   });
 
   afterAll(async () => {
+    await db.delete(otpVerifications);
+    await db.delete(dlqJobs);
     await db.delete(transactions);
     await db.delete(subscriptions);
+    await db.delete(apiKeys);
     await db.delete(customers);
     await db.delete(plans);
     await db.delete(merchants);
@@ -408,7 +417,10 @@ describe('Billing & Domain Logic (e2e)', () => {
       await db.delete(subscriptions);
       await db.delete(customers);
       await db.delete(plans);
-      await db.delete(merchants).where(eq(merchants.id, otherMerchant.id));
+      // Only delete otherMerchant if it was created (guarded against beforeAll failure)
+      if (otherMerchant?.id) {
+        await db.delete(merchants).where(eq(merchants.id, otherMerchant.id));
+      }
     });
 
     it('should retrieve all transactions for authenticated merchant with correct pagination', async () => {

@@ -4,7 +4,16 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { DRIZZLE_PROVIDER } from './../src/database/database.provider';
-import { merchants, apiKeys, otpVerifications } from './../src/database/schema';
+import {
+  merchants,
+  apiKeys,
+  otpVerifications,
+  dlqJobs,
+  transactions,
+  subscriptions,
+  customers,
+  plans,
+} from './../src/database/schema';
 import { AuthService } from './../src/auth/auth.service';
 import { EmailService } from './../src/common/services/email.service';
 import { JwtService } from '@nestjs/jwt';
@@ -43,9 +52,14 @@ describe('Security & Authentication (e2e)', () => {
     const emailService = moduleFixture.get(EmailService);
     jest.spyOn(emailService, 'sendEmail').mockResolvedValue(true);
 
-    // Clean tables and seed test merchant
+    // Clean ALL tables in FK order before seeding
     await db.delete(otpVerifications);
+    await db.delete(dlqJobs);
+    await db.delete(transactions);
+    await db.delete(subscriptions);
     await db.delete(apiKeys);
+    await db.delete(customers);
+    await db.delete(plans);
     await db.delete(merchants);
 
     const hashed = await bcrypt.hash(rawDefaultPassword, 10);
@@ -56,9 +70,13 @@ describe('Security & Authentication (e2e)', () => {
   });
 
   afterAll(async () => {
-    // Clean up database records and close app
     await db.delete(otpVerifications);
+    await db.delete(dlqJobs);
+    await db.delete(transactions);
+    await db.delete(subscriptions);
     await db.delete(apiKeys);
+    await db.delete(customers);
+    await db.delete(plans);
     await db.delete(merchants);
     await app.close();
   });
