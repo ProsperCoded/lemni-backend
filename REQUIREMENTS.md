@@ -51,7 +51,7 @@ This document outlines the sequential, step-by-step implementation tasks for the
 ---
 
 ## 3. EXTERNAL GATEWAY INTEGRATION (ProviderModule)
-- [ ] **3.1. Nomba API Client Implementation**
+- [x] **3.1. Nomba API Client Implementation**
   - Implement `NombaClient` wrapping the outward HTTP calls to Nomba.
   - Dynamically configure the base URL using `NOMBA_MODE` (if `live` -> `https://api.nomba.com`, else -> `https://sandbox.nomba.com`).
   - Resolve authentication credentials dynamically:
@@ -67,13 +67,13 @@ This document outlines the sequential, step-by-step implementation tasks for the
     - Nomba `5xx` or network timeout → classify as **retryable** failure; re-enqueue with exponential backoff without immediately marking the subscription as `past_due`.
     - Nomba auth token expired → transparently refresh the Nomba access token by requesting a new one and retry once before surfacing the error.
     - Checkout link generation fails (Nomba 4xx on `POST /v1/checkout/order`) → return `502 Bad Gateway` to the caller; do NOT create a `Transaction` record.
-- [ ] **3.2. Idempotency Engine**
+- [x] **3.2. Idempotency Engine**
   - Build an idempotency service that generates and persists a unique, deterministic UUID in a local log before making any charging requests to Nomba.
   - Add logic to verify if the key was already transmitted in case of an app crash/retry.
   - **Unhappy paths:**
     - Container crash after key is written to log but before Nomba responds → on reboot, detect transmitted-but-unconfirmed keys and query Nomba's order status endpoint to reconcile the transaction state before re-enqueuing.
     - Duplicate job delivery by BullMQ (at-least-once semantics) → idempotency check at worker entry prevents double-charging; log a warning and skip the job.
-- [ ] **3.3. Circuit Breaker Pattern**
+- [x] **3.3. Circuit Breaker Pattern**
   - Implement a circuit breaker mechanism that monitors Nomba API failures (5xx responses).
   - If failure threshold is reached, trip the breaker and broadcast a signal to `SchedulerModule` to halt active worker queues.
   - **Unhappy paths:**

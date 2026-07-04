@@ -1,4 +1,4 @@
-@status-active
+@status-done
 Feature: FR-003 External Gateway Integration (ProviderModule)
 
   As a payment engine
