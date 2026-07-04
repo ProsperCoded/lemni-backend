@@ -23,6 +23,13 @@ export class NombaClient {
   }
 
   /**
+   * The Nomba parent account ID currently in use (independent of sandbox/live mode).
+   */
+  getAccountId(): string | undefined {
+    return this.configService.get<string>('NOMBA_MAIN_ACCOUNT_ID');
+  }
+
+  /**
    * Helper to get client credentials based on current mode (sandbox vs live)
    */
   private getCredentials() {
@@ -94,8 +101,7 @@ export class NombaClient {
     }
 
     const data = responseData.data as
-      | { access_token: string; expiresAt: string }
-      | undefined;
+      { access_token: string; expiresAt: string } | undefined;
 
     if (!data?.access_token) {
       this.logger.error(

@@ -35,3 +35,9 @@ Feature: FR-004 Billing & Domain Logic (BillingModule)
     When the trial period end is reached
     Then if `trial_require_card` is true and a card token exists, a charge must be attempted immediately
     And if the card is missing or charge fails, the subscription must become `past_due` or `canceled`
+
+  Scenario: Transaction history retrieval and filtering
+    Given an authenticated merchant with transaction records in the database
+    When retrieving transaction logs via GET `/admin/transactions` with optional filters like status, customerId, or subscriptionId
+    Then the response should only return transactions belonging to that merchant
+    And pagination limits and offsets should be correctly enforced

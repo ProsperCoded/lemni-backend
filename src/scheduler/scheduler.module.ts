@@ -1,4 +1,10 @@
-import { Module, OnModuleInit, Logger } from '@nestjs/common';
+import {
+  Module,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+  Inject,
+} from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
@@ -44,10 +50,19 @@ import {
   controllers: [DlqController],
   exports: [CHARGE_QUEUE_TOKEN, DUNNING_QUEUE_TOKEN],
 })
-export class SchedulerModule implements OnModuleInit {
+export class SchedulerModule implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SchedulerModule.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    @Inject(CHARGE_QUEUE_TOKEN) private readonly chargeQueue: Queue,
+    @Inject(DUNNING_QUEUE_TOKEN) private readonly dunningQueue: Queue,
+  ) {}
+
+  async onModuleDestroy() {
+    await this.chargeQueue.close();
+    await this.dunningQueue.close();
+  }
 
   async onModuleInit() {
     // Verify Redis is reachable at startup. Crash-fast if it is not.

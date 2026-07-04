@@ -9,6 +9,8 @@ import {
   HttpCode,
   HttpStatus,
   UsePipes,
+  Get,
+  Query,
 } from '@nestjs/common';
 import type { Request as ExpressRequest } from 'express';
 import {
@@ -21,8 +23,16 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BillingService } from './billing.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { CreatePlanSchema, RegisterCustomerSchema } from './dto/billing.dto';
-import type { CreatePlanDto, RegisterCustomerDto } from './dto/billing.dto';
+import {
+  CreatePlanSchema,
+  RegisterCustomerSchema,
+  TransactionFilterSchema,
+} from './dto/billing.dto';
+import type {
+  CreatePlanDto,
+  RegisterCustomerDto,
+  TransactionFilterDto,
+} from './dto/billing.dto';
 
 @ApiTags('merchant-dashboard/billing')
 @ApiBearerAuth()
@@ -224,5 +234,66 @@ export class BillingController {
     const merchantId = (req.user as Record<string, unknown>)
       .merchantId as string;
     return this.billingService.reactivateSubscription(merchantId, id);
+  }
+
+  @Get('transactions')
+  @ApiOperation({
+    summary: 'Retrieve transaction history',
+    description:
+      'Returns a paginated list of all transactions belonging to the authenticated merchant with filtering support.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Transaction history retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', example: 'tx_abc123' },
+              merchantId: { type: 'string', example: 'merchant-test-123' },
+              customerId: { type: 'string', example: 'cust_abc123' },
+              subscriptionId: {
+                type: 'string',
+                nullable: true,
+                example: 'sub_abc123',
+              },
+              amount: { type: 'number', example: 29.99 },
+              status: { type: 'string', example: 'success' },
+              nombaRef: {
+                type: 'string',
+                nullable: true,
+                example: 'nomba_ref_123',
+              },
+              createdAt: {
+                type: 'string',
+                format: 'date-time',
+                example: '2026-07-04T10:00:00Z',
+              },
+            },
+          },
+        },
+        pagination: {
+          type: 'object',
+          properties: {
+            total: { type: 'integer', example: 100 },
+            limit: { type: 'integer', example: 20 },
+            offset: { type: 'integer', example: 0 },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized JWT session token' })
+  async getTransactions(
+    @Query() query: TransactionFilterDto,
+    @Request() req: ExpressRequest,
+  ) {
+    const merchantId = (req.user as Record<string, unknown>)
+      .merchantId as string;
+    return this.billingService.getTransactions(merchantId, query);
   }
 }

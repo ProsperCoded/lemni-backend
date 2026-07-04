@@ -3,7 +3,12 @@ import { Queue } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
-import { transactions, subscriptions, plans } from '../database/schema';
+import {
+  transactions,
+  subscriptions,
+  plans,
+  customers,
+} from '../database/schema';
 import { computeNextPeriodEnd } from '../billing/billing-period.util';
 import type { NombaWebhookEventDto } from './dto/webhook.dto';
 import type { NotificationJobPayload } from '../notification/dto/notification.dto';
@@ -64,6 +69,14 @@ export class WebhookService {
           });
 
           await this.advanceSubscription(tx.subscriptionId);
+
+          const tokenKey = event.data.tokenizedCardData?.tokenKey;
+          if (tokenKey) {
+            await this.db
+              .update(customers)
+              .set({ nombaToken: tokenKey })
+              .where(eq(customers.id, sub.customerId));
+          }
 
           if (plan) {
             await this.notificationQueue.add('notification', {

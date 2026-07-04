@@ -6,9 +6,15 @@ import {
 } from '@nestjs/common';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
-import { plans, customers, subscriptions } from '../database/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import {
+  plans,
+  customers,
+  subscriptions,
+  transactions,
+} from '../database/schema';
+import { eq, and, sql, gte, lte, desc } from 'drizzle-orm';
 import * as crypto from 'crypto';
+import type { TransactionFilterDto } from './dto/billing.dto';
 
 @Injectable()
 export class BillingService {
@@ -242,5 +248,56 @@ export class BillingService {
       .returning();
 
     return updated;
+  }
+
+  /**
+   * Retrieves paginated and filtered transactions for a merchant.
+   */
+  async getTransactions(merchantId: string, filters: TransactionFilterDto) {
+    const conditions = [eq(transactions.merchantId, merchantId)];
+
+    if (filters.status) {
+      conditions.push(eq(transactions.status, filters.status));
+    }
+    if (filters.customerId) {
+      conditions.push(eq(transactions.customerId, filters.customerId));
+    }
+    if (filters.subscriptionId) {
+      conditions.push(eq(transactions.subscriptionId, filters.subscriptionId));
+    }
+    if (filters.startDate) {
+      conditions.push(gte(transactions.createdAt, filters.startDate));
+    }
+    if (filters.endDate) {
+      conditions.push(lte(transactions.createdAt, filters.endDate));
+    }
+
+    const limitVal = filters.limit ? Number(filters.limit) : 20;
+    const offsetVal = filters.offset ? Number(filters.offset) : 0;
+
+    const data = await this.db
+      .select()
+      .from(transactions)
+      .where(and(...conditions))
+      .limit(limitVal)
+      .offset(offsetVal)
+      .orderBy(desc(transactions.createdAt));
+
+    // Get total count for pagination metadata
+    const [countResult] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(transactions)
+      .where(and(...conditions));
+
+    const total = countResult ? Number(countResult.count) : 0;
+
+    return {
+      data,
+      pagination: {
+        total,
+        limit: limitVal,
+        offset: offsetVal,
+      },
+    };
   }
 }

@@ -33,3 +33,15 @@ export const RegisterCustomerSchema = z.object({
 });
 
 export type RegisterCustomerDto = z.infer<typeof RegisterCustomerSchema>;
+
+export const TransactionFilterSchema = z.object({
+  status: z.enum(['pending', 'success', 'failed']).optional(),
+  customerId: z.string().optional(),
+  subscriptionId: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  limit: z.string().regex(/^\d+$/).transform(Number).optional().default('20'),
+  offset: z.string().regex(/^\d+$/).transform(Number).optional().default('0'),
+});
+
+export type TransactionFilterDto = z.infer<typeof TransactionFilterSchema>;

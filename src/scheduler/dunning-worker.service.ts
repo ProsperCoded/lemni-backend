@@ -10,7 +10,13 @@ import { eq } from 'drizzle-orm';
 import { ConfigService } from '@nestjs/config';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
-import { subscriptions, customers, plans, dlqJobs } from '../database/schema';
+import {
+  subscriptions,
+  customers,
+  plans,
+  dlqJobs,
+  merchants,
+} from '../database/schema';
 import { NombaClient } from '../provider/nomba.client';
 import { CircuitBreakerService } from '../provider/circuit-breaker.service';
 import { computeNextPeriodEnd } from '../billing/billing-period.util';
@@ -83,6 +89,14 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
           err.message,
       );
     });
+
+    this.chargeWorker.on('error', (err) => {
+      this.logger.error('[ChargeWorker] Connection error: ' + err.message);
+    });
+
+    this.dunningWorker.on('error', (err) => {
+      this.logger.error('[DunningWorker] Connection error: ' + err.message);
+    });
   }
 
   async onModuleDestroy() {
@@ -97,9 +111,10 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
    * On retryable 5xx/timeout, re-enqueues to DunningQueue with backoff.
    */
   private async processCharge(job: Job<ChargeJobPayload>): Promise<void> {
-    const { subscriptionId, nombaToken } = await this.resolveContext(job.data);
+    const { subscriptionId, nombaToken, customerEmail, callbackUrl } =
+      await this.resolveContext(job.data);
 
-    if (!nombaToken) {
+    if (!nombaToken || !customerEmail) {
       this.logger.warn(
         '[ChargeWorker] No nombaToken for subscription ' +
           subscriptionId +
@@ -128,19 +143,27 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
           ' — amount: ' +
           job.data.amount,
       );
+      const chargeIdempotencyKey =
+        'charge-' + subscriptionId + '-' + Date.now();
       const result = (await this.nombaClient.chargeTokenizedCard(
-        'charge-' + subscriptionId + '-' + Date.now(),
+        chargeIdempotencyKey,
         {
-          amount: job.data.amount,
-          customerId: job.data.customerId,
-          tokenizedCard: nombaToken,
-          transactionId: 'tx-' + subscriptionId + '-' + Date.now(),
-          accountId: job.data.merchantId,
+          tokenKey: nombaToken,
+          order: {
+            orderReference: chargeIdempotencyKey,
+            customerId: job.data.customerId,
+            callbackUrl,
+            customerEmail,
+            amount: job.data.amount,
+            currency: 'NGN',
+            accountId: this.nombaClient.getAccountId(),
+          },
         },
       )) as Record<string, unknown>;
 
+      const responseData = (result.data as Record<string, unknown>) ?? {};
       const transactionRef =
-        (result.transactionRef as string | undefined) ?? 'n/a';
+        (responseData.orderReference as string | undefined) ?? 'n/a';
       this.logger.log(
         '[ChargeWorker] Charge succeeded for subscription ' +
           subscriptionId +
@@ -213,14 +236,20 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
     const customer = await this.db.query.customers.findFirst({
       where: eq(customers.id, job.data.customerId),
     });
+    const merchant = await this.db.query.merchants.findFirst({
+      where: eq(merchants.id, job.data.merchantId),
+    });
 
-    if (!plan || !customer?.nombaToken) {
+    if (!plan || !customer?.nombaToken || !customer.email) {
       await this.handleGracePeriodExhausted(
         job.data,
-        'Missing plan or nomba token',
+        'Missing plan, nomba token, or customer email',
       );
       return;
     }
+
+    const callbackUrl =
+      merchant?.defaultRedirectUrl || 'https://lemni.com/checkout/success';
 
     const maxRetries = plan.gracePeriodDays;
 
@@ -240,17 +269,20 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
           job.data.retryCount +
           ')',
       );
-      await this.nombaClient.chargeTokenizedCard(
-        'dunning-' + subscriptionId + '-retry-' + job.data.retryCount,
-        {
-          amount: job.data.amount,
+      const dunningIdempotencyKey =
+        'dunning-' + subscriptionId + '-retry-' + job.data.retryCount;
+      await this.nombaClient.chargeTokenizedCard(dunningIdempotencyKey, {
+        tokenKey: customer.nombaToken,
+        order: {
+          orderReference: dunningIdempotencyKey,
           customerId: job.data.customerId,
-          tokenizedCard: customer.nombaToken,
-          transactionId:
-            'dunning-tx-' + subscriptionId + '-' + job.data.retryCount,
-          accountId: job.data.merchantId,
+          callbackUrl,
+          customerEmail: customer.email,
+          amount: job.data.amount,
+          currency: 'NGN',
+          accountId: this.nombaClient.getAccountId(),
         },
-      );
+      });
 
       this.circuitBreaker.recordSuccess();
       const nextPeriodEnd = computeNextPeriodEnd(plan.interval);
@@ -383,14 +415,22 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
     subscriptionId: string;
     nombaToken: string | null;
     merchantId: string;
+    customerEmail: string | null;
+    callbackUrl: string;
   }> {
     const customer = await this.db.query.customers.findFirst({
       where: eq(customers.id, payload.customerId),
+    });
+    const merchant = await this.db.query.merchants.findFirst({
+      where: eq(merchants.id, payload.merchantId),
     });
     return {
       subscriptionId: payload.subscriptionId,
       nombaToken: customer?.nombaToken ?? null,
       merchantId: payload.merchantId,
+      customerEmail: customer?.email ?? null,
+      callbackUrl:
+        merchant?.defaultRedirectUrl || 'https://lemni.com/checkout/success',
     };
   }
 

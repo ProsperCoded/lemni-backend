@@ -44,7 +44,7 @@ describe('Notification Module (e2e)', () => {
     // Generate JWT token for merchant dashboard (admin endpoints)
     merchantJwt = jwtService.sign(
       { sub: testMerchant.id, email: testMerchant.email },
-      { expiresIn: '1h' }
+      { expiresIn: '1h' },
     );
   });
 

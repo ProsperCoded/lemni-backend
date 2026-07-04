@@ -117,6 +117,12 @@ This document outlines the sequential, step-by-step implementation tasks for the
   - **Unhappy paths:**
     - Customer's `nomba_token` has expired since cancellation → require re-tokenisation before reactivation.
     - Plan the subscription was on is archived → block reactivation; merchant must assign a new active plan.
+- [x] **4.5. Transaction History & Filtering**
+  - Expose `GET /admin/transactions` allowing merchants to view, paginate, and filter transaction logs.
+  - Support query parameters: `status`, `customerId`, `subscriptionId`, `startDate`, `endDate`, `limit`, and `offset`.
+  - **Unhappy paths:**
+    - Querying merchant requests transactions for customers or subscriptions that belong to a different merchant → return an empty array (do not cross-leak transactions).
+    - Limit or offset query parameters are malformed (e.g. non-numeric strings) → validation fails with `400 Bad Request`.
 
 ---
 

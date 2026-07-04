@@ -14,6 +14,11 @@ export const NombaWebhookEventSchema = z.object({
       time: z.string(),
       responseCode: z.string().nullable().optional(),
     }),
+    tokenizedCardData: z
+      .object({
+        tokenKey: z.string(),
+      })
+      .optional(),
   }),
 });
 

@@ -97,6 +97,8 @@ export class CheckoutService {
     // Insert pending transaction record locally
     await this.db.insert(transactions).values({
       id: transactionId,
+      merchantId,
+      customerId: customer.id,
       amount: data.amount,
       status: 'pending',
     });
@@ -172,11 +174,18 @@ export class CheckoutService {
     // Create pending transaction record
     await this.db.insert(transactions).values({
       id: transactionId,
+      merchantId,
+      customerId: customer.id,
       subscriptionId,
       amount: plan.amount,
       status: 'pending',
     });
 
+    // Recurring subscriptions must be charged automatically on renewal,
+    // so the first checkout is restricted to Card (no bank Transfer) and
+    // requests Nomba to tokenize the card. The token arrives later via
+    // the payment_success webhook (see webhook.service.ts) and is stored
+    // on customers.nombaToken for use by DunningWorkerService.
     const orderPayload = {
       order: {
         amount: plan.amount,
@@ -185,7 +194,9 @@ export class CheckoutService {
         currency: 'NGN',
         customerEmail: customer.email,
         callbackUrl,
+        allowedPaymentMethods: ['Card'],
       },
+      tokenizeCard: true,
     };
 
     try {

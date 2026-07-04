@@ -9,6 +9,7 @@ import {
   plans,
   customers,
   subscriptions,
+  transactions,
 } from './../src/database/schema';
 import { ProrationService } from './../src/billing/proration.service';
 import { BillingService } from './../src/billing/billing.service';
@@ -43,6 +44,7 @@ describe('Billing & Domain Logic (e2e)', () => {
     jwtService = moduleFixture.get(JwtService);
 
     // Clean tables and seed test merchant
+    await db.delete(transactions);
     await db.delete(subscriptions);
     await db.delete(customers);
     await db.delete(plans);
@@ -57,6 +59,7 @@ describe('Billing & Domain Logic (e2e)', () => {
   });
 
   afterAll(async () => {
+    await db.delete(transactions);
     await db.delete(subscriptions);
     await db.delete(customers);
     await db.delete(plans);
@@ -310,6 +313,166 @@ describe('Billing & Domain Logic (e2e)', () => {
         .post(`/admin/subscriptions/${noCardSubId}/reactivate`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(403);
+    });
+  });
+
+  describe('Transaction History & Filtering (GET /admin/transactions)', () => {
+    let customerA: any;
+    let customerB: any;
+    let planA: any;
+    let subA: any;
+    let otherMerchant: any;
+    let otherCustomer: any;
+
+    beforeAll(async () => {
+      // 1. Create plan, customer and subscription for testMerchant
+      planA = await billingService.createPlan(testMerchant.id, {
+        name: 'Plan A',
+        amount: 50,
+        interval: 'monthly',
+      });
+
+      customerA = await billingService.registerCustomer(testMerchant.id, {
+        email: 'customer-a@test.com',
+      });
+
+      customerB = await billingService.registerCustomer(testMerchant.id, {
+        email: 'customer-b@test.com',
+      });
+
+      subA = {
+        id: 'sub-test-history-a',
+        customerId: customerA.id,
+        planId: planA.id,
+        status: 'active',
+        currentPeriodEnd: new Date('2026-08-01').toISOString(),
+      };
+      await db.insert(subscriptions).values(subA);
+
+      // 2. Create another merchant, customer and subscription for security tests
+      otherMerchant = {
+        id: 'other-merchant-id',
+        name: 'Other Merchant',
+        email: 'other@merchant.com',
+      };
+      await db.insert(merchants).values(otherMerchant);
+
+      otherCustomer = await billingService.registerCustomer(otherMerchant.id, {
+        email: 'other-customer@test.com',
+      });
+
+      // 3. Seed transactions
+      await db.insert(transactions).values([
+        {
+          id: 'tx-1',
+          merchantId: testMerchant.id,
+          customerId: customerA.id,
+          subscriptionId: subA.id,
+          amount: 50,
+          status: 'success',
+          createdAt: '2026-07-04T10:00:00Z',
+        },
+        {
+          id: 'tx-2',
+          merchantId: testMerchant.id,
+          customerId: customerA.id,
+          subscriptionId: subA.id,
+          amount: 50,
+          status: 'failed',
+          createdAt: '2026-07-04T11:00:00Z',
+        },
+        {
+          id: 'tx-3',
+          merchantId: testMerchant.id,
+          customerId: customerB.id,
+          amount: 100, // One-time payment
+          status: 'pending',
+          createdAt: '2026-07-04T12:00:00Z',
+        },
+        {
+          id: 'tx-other',
+          merchantId: otherMerchant.id,
+          customerId: otherCustomer.id,
+          amount: 200,
+          status: 'success',
+          createdAt: '2026-07-04T13:00:00Z',
+        },
+      ]);
+    });
+
+    afterAll(async () => {
+      await db.delete(transactions);
+      await db.delete(subscriptions);
+      await db.delete(customers);
+      await db.delete(plans);
+      await db.delete(merchants).where(eq(merchants.id, otherMerchant.id));
+    });
+
+    it('should retrieve all transactions for authenticated merchant with correct pagination', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/admin/transactions')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      // Should return 3 transactions (tx-1, tx-2, tx-3), excluding tx-other
+      expect(response.body.data.length).toBe(3);
+      expect(response.body.pagination.total).toBe(3);
+      expect(response.body.data[0].id).toBe('tx-3'); // desc order
+    });
+
+    it('should filter transactions by status', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/admin/transactions?status=success')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(response.body.data.length).toBe(1);
+      expect(response.body.data[0].id).toBe('tx-1');
+    });
+
+    it('should filter transactions by customerId', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/admin/transactions?customerId=${customerA.id}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(response.body.data.length).toBe(2);
+      expect(response.body.data.map((tx: any) => tx.id)).toContain('tx-1');
+      expect(response.body.data.map((tx: any) => tx.id)).toContain('tx-2');
+    });
+
+    it('should filter transactions by subscriptionId', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/admin/transactions?subscriptionId=${subA.id}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(response.body.data.length).toBe(2);
+    });
+
+    it('should filter transactions by date range', async () => {
+      const response = await request(app.getHttpServer())
+        .get(
+          '/admin/transactions?startDate=2026-07-04T10:30:00Z&endDate=2026-07-04T12:30:00Z',
+        )
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      // Should return tx-2 (11:00) and tx-3 (12:00)
+      expect(response.body.data.length).toBe(2);
+      expect(response.body.data.map((tx: any) => tx.id)).toContain('tx-2');
+      expect(response.body.data.map((tx: any) => tx.id)).toContain('tx-3');
+    });
+
+    it('should enforce pagination limit and offset', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/admin/transactions?limit=1&offset=1')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(response.body.data.length).toBe(1);
+      expect(response.body.data[0].id).toBe('tx-2'); // second element in desc order
+      expect(response.body.pagination.total).toBe(3);
     });
   });
 });

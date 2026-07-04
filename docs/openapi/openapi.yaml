@@ -380,6 +380,70 @@ paths:
       summary: Reactivate a canceled subscription
       tags:
         - merchant-dashboard/billing
+  /admin/transactions:
+    get:
+      description: Returns a paginated list of all transactions belonging to the authenticated merchant with filtering support.
+      operationId: BillingController_getTransactions
+      parameters: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    items:
+                      properties:
+                        amount:
+                          example: 29.99
+                          type: number
+                        createdAt:
+                          example: '2026-07-04T10:00:00Z'
+                          format: date-time
+                          type: string
+                        customerId:
+                          example: cust_abc123
+                          type: string
+                        id:
+                          example: tx_abc123
+                          type: string
+                        merchantId:
+                          example: merchant-test-123
+                          type: string
+                        nombaRef:
+                          example: nomba_ref_123
+                          nullable: true
+                          type: string
+                        status:
+                          example: success
+                          type: string
+                        subscriptionId:
+                          example: sub_abc123
+                          nullable: true
+                          type: string
+                      type: object
+                    type: array
+                  pagination:
+                    properties:
+                      limit:
+                        example: 20
+                        type: integer
+                      offset:
+                        example: 0
+                        type: integer
+                      total:
+                        example: 100
+                        type: integer
+                    type: object
+                type: object
+          description: Transaction history retrieved successfully
+        '401':
+          description: Unauthorized JWT session token
+      security:
+        - bearer: []
+      summary: Retrieve transaction history
+      tags:
+        - merchant-dashboard/billing
   /api/v1/admin/telegram/connect:
     post:
       description: Bot calls this endpoint after merchant sends /start command

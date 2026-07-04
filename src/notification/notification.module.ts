@@ -1,4 +1,4 @@
-import { Module, Global } from '@nestjs/common';
+import { Module, Global, OnModuleDestroy, Inject } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
 import { NotificationService } from './notification.service';
@@ -29,4 +29,13 @@ import type { NotificationJobPayload } from './dto/notification.dto';
   ],
   exports: ['NOTIFICATION_QUEUE', NotificationService],
 })
-export class NotificationModule {}
+export class NotificationModule implements OnModuleDestroy {
+  constructor(
+    @Inject('NOTIFICATION_QUEUE')
+    private readonly notificationQueue: Queue<NotificationJobPayload>,
+  ) {}
+
+  async onModuleDestroy() {
+    await this.notificationQueue.close();
+  }
+}
