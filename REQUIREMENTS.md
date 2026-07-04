@@ -115,28 +115,108 @@ This document outlines the sequential, step-by-step implementation tasks for the
 ---
 
 ## 5. API BOUNDARY (CheckoutModule)
-- [x] **5.1. One-Time Payment Endpoint (`POST /api/v1/pay`)**
-  - Implement route to accept payload for one-time payments.
-  - Invoke `ProviderModule` to request a Nomba checkoutLink.
-  - Return a unique `session_id` and checkout URL to the merchant.
+
+### Checkout Architecture Overview
+
+**Key Principle:** Lemni does NOT build a custom payment form. Nomba provides the hosted checkout UI. Lemni orchestrates checkout sessions and manages state transitions via webhooks.
+
+**Two Checkout Flows:**
+
+1. **Developer API Flow** (authenticated via API Key)
+   - Developer calls `POST /api/v1/pay` or `POST /api/v1/subscribe` with email + amount/planId
+   - Lemni creates a session (transaction/subscription record)
+   - Lemni calls Nomba's API to generate a checkout URL
+   - Lemni returns the checkout URL to the developer
+   - Developer's frontend redirects the customer to Nomba's hosted checkout page
+   - Customer enters card details on Nomba's page (we never see the card)
+   - Nomba webhooks us with `payment_success` or `payment_failed`
+   - Lemni updates the session state
+
+2. **Public Plan Link Flow** (unauthenticated, merchant-shareable)
+   - Merchant creates a public plan (e.g., a recurring subscription plan)
+   - Merchant shares a shareable link (e.g., `https://merchant-app.com/checkout?plan=plan-abc`)
+   - Customer lands on the merchant's page and sees a form: "Enter your email to proceed"
+   - Customer enters their email and clicks "Pay"
+   - Merchant's frontend calls `POST /api/v1/checkout/plans/:planId/sessions` with the customer's email
+   - Lemni creates a session (subscription + transaction record)
+   - Lemni calls Nomba's API to generate a checkout URL
+   - Lemni returns the checkout URL to the merchant's frontend
+   - Merchant's frontend redirects the customer to Nomba's hosted checkout page
+   - Customer enters card details on Nomba's page (we never see the card)
+   - Nomba webhooks us with `payment_success` or `payment_failed`
+   - Lemni updates the session state
+
+**Critical Constraint:** Nomba requires an email address for all checkout sessions. Email must be captured either by the developer (API flow) or the merchant's frontend (public plan flow) — we do not generate anonymous checkout URLs.
+
+---
+
+- [x] **5.1. One-Time Payment Endpoint (`POST /api/v1/pay`) — Developer API Flow**
+  - **Purpose:** Developers call this to initiate a one-time charge on behalf of a customer.
+  - **Auth:** Requires valid API Key (Bearer token) in `Authorization` header.
+  - **Request payload:** `{ amount: number, email: string, callbackUrl?: string }`
+  - **Developer responsibility:** Collect the customer's email on the developer's frontend, then POST to this endpoint.
+  - **What Lemni does:**
+    1. Create a customer record if it doesn't exist (keyed by email + merchant)
+    2. Create a pending `Transaction` record
+    3. Call Nomba's `POST /v1/checkout/order` API with the email and amount
+    4. Return `{ sessionId, checkoutUrl }` to the developer
+  - **Developer next step:** Redirect the customer to the `checkoutUrl` (Nomba's hosted checkout page).
+  - **Return:** `{ sessionId: string, checkoutUrl: string }`
   - **Unhappy paths:**
-    - Invalid or missing required fields (amount, currency, customer reference) → return `400 Bad Request` with field-level validation errors before hitting Nomba.
+    - Invalid or missing required fields (amount, email) → return `400 Bad Request` with field-level validation errors before hitting Nomba.
+    - Missing or invalid API Key → return `401 Unauthorized`
     - Nomba checkout link generation fails → return `502 Bad Gateway`; do NOT persist a `Transaction` record.
-    - Duplicate `session_id` collision (extremely unlikely but must be handled) → regenerate and retry up to 3 times before returning `500`.
-- [x] **5.2. Recurring Subscription Endpoint (`POST /api/v1/subscribe`)**
-  - Implement route accepting a pre-configured `plan_id` or dynamic interval data.
-  - Create a pending Subscription and Transaction in the database.
-  - Return a checkout session URL.
+    - Duplicate `sessionId` collision (extremely unlikely but must be handled) → regenerate and retry up to 3 times before returning `500`.
+
+- [x] **5.2. Recurring Subscription Endpoint (`POST /api/v1/subscribe`) — Developer API Flow**
+  - **Purpose:** Developers call this to initiate a recurring subscription on behalf of a customer.
+  - **Auth:** Requires valid API Key (Bearer token) in `Authorization` header.
+  - **Request payload:** `{ planId: string, email: string, callbackUrl?: string }`
+  - **Developer responsibility:** Collect the customer's email on the developer's frontend, then POST to this endpoint.
+  - **What Lemni does:**
+    1. Look up the plan by ID; confirm it belongs to the authenticated merchant
+    2. Create a customer record if it doesn't exist (keyed by email + merchant)
+    3. Create a pending `Subscription` record (status: `trialing` if `plan.trialDays > 0`, else `active`)
+    4. Create a pending `Transaction` record
+    5. Call Nomba's `POST /v1/checkout/order` API with the email and plan amount
+    6. Return `{ sessionId, subscriptionId, checkoutUrl }` to the developer
+  - **Developer next step:** Redirect the customer to the `checkoutUrl` (Nomba's hosted checkout page).
+  - **Return:** `{ sessionId: string, subscriptionId: string, checkoutUrl: string }`
   - **Unhappy paths:**
-    - `plan_id` not found or does not belong to the authenticated merchant → return `404 Not Found`.
+    - Missing or invalid API Key → return `401 Unauthorized`
+    - `planId` not found or does not belong to the authenticated merchant → return `404 Not Found`.
     - Customer already has an `active` or `trialing` subscription to the same plan → return `409 Conflict`.
     - Plan `billing_model = one_time` but subscription endpoint is called → return `400 Bad Request` with clear message directing to `POST /api/v1/pay`.
-    - Dynamic interval data provided but `interval` field is invalid → return `400 Bad Request`.
-- [x] **5.3. Session Status Polling Endpoint (`GET /api/v1/sessions/:session_id/status`)**
-  - Provide an endpoint to fetch the status of a specific checkout session so frontend applications can poll for success/failure.
+    - Invalid or missing email → return `400 Bad Request`.
+    - Nomba checkout link generation fails → return `502 Bad Gateway`; do NOT persist `Subscription` or `Transaction` records.
+
+- [x] **5.3. Public Plan Checkout Endpoint (`POST /api/v1/checkout/plans/:planId/sessions`) — Public Plan Link Flow**
+  - **Purpose:** Merchants expose this endpoint on their public-facing app to let anyone (without API Key) initiate a subscription to a published plan.
+  - **Auth:** No authentication required (this is a public endpoint). The merchant's frontend calls this on behalf of the customer.
+  - **Request payload:** `{ email: string, callbackUrl?: string }`
+  - **Merchant's frontend responsibility:** Collect the customer's email (via a form), then POST to this endpoint.
+  - **What Lemni does:**
+    1. Look up the plan by ID (this is a public lookup — any plan ID works)
+    2. Extract the merchant ID from the plan
+    3. Create a customer record if it doesn't exist (keyed by email + merchant)
+    4. Create a pending `Subscription` record (status: `trialing` if `plan.trialDays > 0`, else `active`)
+    5. Create a pending `Transaction` record
+    6. Call Nomba's `POST /v1/checkout/order` API with the email and plan amount
+    7. Return `{ sessionId, subscriptionId, checkoutUrl }` to the merchant's frontend
+  - **Merchant's frontend next step:** Redirect the customer to the `checkoutUrl` (Nomba's hosted checkout page).
+  - **Return:** `{ sessionId: string, subscriptionId: string, checkoutUrl: string }`
+  - **Unhappy paths:**
+    - `planId` not found → return `404 Not Found`.
+    - Missing or invalid email → return `400 Bad Request`.
+    - Nomba checkout link generation fails → return `502 Bad Gateway`; do NOT persist `Subscription` or `Transaction` records.
+
+- [x] **5.4. Session Status Polling Endpoint (`GET /api/v1/sessions/:session_id/status`)**
+  - **Purpose:** Developers and merchants poll this endpoint to check if a checkout session has been completed (payment succeeded or failed).
+  - **Auth:** No authentication required (session ID is opaque but specific; polling is idempotent).
+  - **Response:** `{ sessionId, amount, status: 'pending' | 'success' | 'failed', nombaRef?, createdAt }`
   - **Unhappy paths:**
     - `session_id` does not exist → return `404 Not Found`.
-    - Session belongs to a different merchant (auth context mismatch) → return `403 Forbidden`.
+    - Session belongs to a different merchant (auth context mismatch, if merchant context is available) → return `403 Forbidden`.
     - Session has expired without completion (TTL exceeded) → return status `expired` in response body, do not return `404`.
 
 ---

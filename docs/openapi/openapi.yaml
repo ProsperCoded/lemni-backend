@@ -23,7 +23,9 @@ paths:
         - developer-apis/health
   /admin/api-keys:
     get:
-      description: Returns a list of API keys with their metadata (without the secret)
+      description: >-
+        Returns a list of all API keys owned by the authenticated merchant, including their status and creation date.
+        The secret part is never returned.
       operationId: ApiKeysController_listKeys
       parameters: []
       responses:
@@ -31,35 +33,84 @@ paths:
           content:
             application/json:
               schema:
-                example:
-                  - createdAt: '2026-07-04T10:00:00Z'
-                    environment: test
-                    id: abc123def456
-                    isActive: true
-          description: API keys retrieved
+                items:
+                  properties:
+                    createdAt:
+                      description: Key creation timestamp
+                      example: '2026-07-04T10:00:00Z'
+                      format: date-time
+                      type: string
+                    environment:
+                      description: Key environment
+                      enum:
+                        - test
+                        - live
+                      example: test
+                      type: string
+                    id:
+                      description: Key identifier
+                      example: abc123def456
+                      type: string
+                    isActive:
+                      description: Whether the key is active (false if revoked)
+                      example: true
+                      type: boolean
+                  type: object
+                type: array
+          description: API keys retrieved successfully
         '401':
-          description: Unauthorized JWT session token
+          description: Missing or invalid JWT token
       security:
         - bearer: []
       summary: List all API keys for the merchant
       tags:
         - merchant-dashboard/api-keys
     post:
-      description: Creates and returns a new API key. Store it securely - you will not see it again.
+      description: >-
+        Creates and returns a new API key for merchant API authentication. The full key is returned only once - store it
+        securely. Use test keys for development and live keys for production.
       operationId: ApiKeysController_generateKey
       parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                environment:
+                  description: API key environment. Use "test" for development, "live" for production.
+                  enum:
+                    - test
+                    - live
+                  example: test
+                  type: string
+              required:
+                - environment
+              type: object
+        required: true
       responses:
         '201':
           content:
             application/json:
               schema:
-                example:
-                  keyId: abc123def456
-                  message: Store this key safely. You will not be able to see it again.
-                  rawKey: sk_test_abc123def456_xyz789abc123def456xyz789abc123
+                properties:
+                  keyId:
+                    description: Key identifier for reference in dashboards
+                    example: abc123def456
+                    type: string
+                  message:
+                    description: Security reminder
+                    example: Store this key safely. You will not be able to see it again.
+                    type: string
+                  rawKey:
+                    description: Complete API key. Store this securely - you will not see it again.
+                    example: sk_test_abc123def456_xyz789abc123def456xyz789abc123
+                    type: string
+                type: object
           description: API key successfully generated
+        '400':
+          description: Invalid environment value
         '401':
-          description: Unauthorized JWT session token
+          description: Missing or invalid JWT token
       security:
         - bearer: []
       summary: Generate a new API key
@@ -67,7 +118,9 @@ paths:
         - merchant-dashboard/api-keys
   /admin/api-keys/{id}:
     delete:
-      description: Marks the specified API key as inactive immediately, blocking any subsequent API requests using it.
+      description: >-
+        Marks the specified API key as inactive immediately. All future requests using this key will be rejected with a
+        403 Forbidden response.
       operationId: ApiKeysController_revokeKey
       parameters:
         - in: path
@@ -77,11 +130,22 @@ paths:
             type: string
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    example: API key successfully revoked
+                    type: string
+                  success:
+                    example: true
+                    type: boolean
+                type: object
           description: API key successfully revoked
         '401':
-          description: Unauthorized JWT session token
+          description: Missing or invalid JWT token
         '404':
-          description: API key not found or does not belong to the merchant
+          description: API key not found or does not belong to this merchant
       security:
         - bearer: []
       summary: Revoke an API key
@@ -432,7 +496,11 @@ paths:
         - merchant-dashboard/billing
   /api/v1/checkout/plans/{planId}/sessions:
     post:
-      description: Allows off-the-shelf payment links to initialize checkout sessions for customer emails.
+      description: |
+        **Public Plan Link Flow** — no authentication required.
+        This endpoint allows merchants to create public payment links for customers.
+        The merchant's frontend collects the customer email and calls this endpoint.
+        Returns a Nomba hosted checkout URL. Nomba then sends a webhook with the payment result.
       operationId: CheckoutController_createPublicPlanSession
       parameters:
         - description: The static pricing plan ID
@@ -478,12 +546,15 @@ paths:
           description: Checkout session generated
         '404':
           description: Plan not found
-      summary: Generate public plan checkout session
+      summary: Generate public plan checkout session (no auth required)
       tags:
         - developer-apis/checkout
   /api/v1/pay:
     post:
-      description: Generates a payment URL for a singular checkout charge.
+      description: |
+        **Developer API Flow** — requires API Key authentication.
+        Your backend collects the customer email and calls this endpoint with a payment amount.
+        Returns a Nomba hosted checkout URL. Nomba then sends a webhook with the payment result.
       operationId: CheckoutController_createOneTimePayment
       parameters:
         - description: Bearer <API_KEY>
@@ -531,7 +602,7 @@ paths:
           description: Checkout session successfully created
         '401':
           description: Unauthorized API key
-      summary: Create a one-time checkout session
+      summary: Create a one-time checkout session (API Key required)
       tags:
         - developer-apis/checkout
   /api/v1/sessions/{id}/status:
@@ -639,81 +710,193 @@ paths:
         - developer-apis/checkout
   /api/v1/webhooks/nomba:
     post:
-      description: Verifies the Nomba signature and updates the matching transaction/subscription state accordingly.
       operationId: WebhookController_handleNombaWebhook
       parameters: []
       responses:
         '200':
-          description: Event processed, ignored, orphaned, or deduplicated
-        '401':
-          description: Signature verification failed
-      summary: Receive Nomba payment webhook events
+          description: ''
       tags:
-        - developer-apis/webhooks
+        - Webhook
   /auth/login:
     post:
-      description: Returns access token (1h) and refresh token (7d)
+      description: >-
+        Authenticates merchant credentials and returns access token (1h expiry) and refresh token (7d expiry). Use
+        access token for protected endpoints.
       operationId: AuthController_login
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                email:
+                  description: Registered merchant email
+                  example: acme@example.com
+                  format: email
+                  type: string
+                password:
+                  description: Merchant account password
+                  example: SecurePassword123
+                  format: password
+                  type: string
+              required:
+                - email
+                - password
+              type: object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  accessToken:
+                    description: JWT access token (valid for 1 hour)
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    type: string
+                  merchant:
+                    properties:
+                      email:
+                        format: email
+                        type: string
+                      id:
+                        format: uuid
+                        type: string
+                      name:
+                        type: string
+                    type: object
+                  refreshToken:
+                    description: JWT refresh token (valid for 7 days)
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    type: string
+                type: object
+          description: Login successful
+        '401':
+          description: Invalid email or password
+      summary: Authenticate merchant and receive JWT tokens
+      tags:
+        - merchant-dashboard/auth
+  /auth/logout:
+    post:
+      description: >-
+        Notifies the server of logout. Client should immediately discard stored tokens. Tokens are stateless; this is a
+        notification endpoint.
+      operationId: AuthController_logout
       parameters: []
       responses:
         '200':
           content:
             application/json:
               schema:
-                example:
-                  accessToken: eyJhbG...
-                  merchant:
-                    email: test@example.com
-                    id: uuid
-                    name: Acme
-                  refreshToken: eyJhbG...
-          description: Login successful
+                properties:
+                  message:
+                    example: Successfully logged out. Please discard tokens.
+                    type: string
+                type: object
+          description: Successfully logged out
         '401':
-          description: Invalid credentials
-      summary: Authenticate merchant and receive JWT tokens
-      tags:
-        - auth
-  /auth/logout:
-    post:
-      description: Server-side logout - client should discard tokens
-      operationId: AuthController_logout
-      parameters: []
-      responses:
-        '200':
-          description: Logged out successfully
+          description: Missing or invalid access token
       security:
         - bearer: []
-      summary: Logout (token invalidation on client)
+      summary: Logout (invalidate session)
       tags:
-        - auth
+        - merchant-dashboard/auth
   /auth/refresh:
     post:
-      description: Returns a new access token (1h)
+      description: >-
+        Exchange a valid refresh token for a new access token (1h expiry). Use this before your access token expires to
+        maintain an active session.
       operationId: AuthController_refresh
       parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                refreshToken:
+                  description: Valid refresh token from login response
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  type: string
+              required:
+                - refreshToken
+              type: object
+        required: true
       responses:
         '200':
-          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                properties:
+                  accessToken:
+                    description: New JWT access token (valid for 1 hour)
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    type: string
+                type: object
+          description: Token refreshed successfully
         '401':
-          description: Invalid refresh token
+          description: Invalid or expired refresh token
       summary: Refresh access token using refresh token
       tags:
-        - auth
+        - merchant-dashboard/auth
   /auth/signup:
     post:
-      description: Create a new merchant account with email and password
+      description: >-
+        Create a new merchant account with email and password. Password must be at least 8 characters. Email must be
+        unique.
       operationId: AuthController_signup
       parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                email:
+                  description: Unique merchant email address
+                  example: acme@example.com
+                  format: email
+                  type: string
+                name:
+                  description: Merchant display name
+                  example: Acme Corporation
+                  type: string
+                password:
+                  description: Password (minimum 8 characters)
+                  example: SecurePassword123
+                  format: password
+                  minLength: 8
+                  type: string
+              required:
+                - email
+                - password
+                - name
+              type: object
+        required: true
       responses:
         '201':
+          content:
+            application/json:
+              schema:
+                properties:
+                  email:
+                    example: acme@example.com
+                    format: email
+                    type: string
+                  id:
+                    example: 550e8400-e29b-41d4-a716-446655440000
+                    format: uuid
+                    type: string
+                  name:
+                    example: Acme Corporation
+                    type: string
+                type: object
           description: Merchant successfully registered
         '400':
-          description: Invalid input
+          description: Invalid input or weak password
         '409':
           description: Email already registered
       summary: Register a new merchant account
       tags:
-        - auth
+        - merchant-dashboard/auth
   /test-api-key:
     get:
       operationId: AppController_testApiKey
