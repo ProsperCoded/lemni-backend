@@ -5,8 +5,8 @@ This document outlines the sequential, step-by-step implementation tasks for the
 ---
 
 ## 1. FOUNDATIONAL INFRASTRUCTURE & DATABASE CONFIGURATION
-- [x] **1.1. Environment Configuration & NestJS Configuration Setup**
-  - Define all required environment variables in a `.env.example` file (including Turso/libSQL credentials, Nomba credentials, Upstash Redis URL, API Key hash salt, Telegram Bot Token and Chat ID configurations).
+- [ ] **1.1. Environment Configuration & NestJS Configuration Setup**
+  - Define all required environment variables in a `.env.example` file (including Turso/libSQL credentials, Nomba credentials [NOMBA_MODE, NOMBA_MAIN_ACCOUNT_ID, NOMBA_SUB_ACCOUNT_ID, NOMBA_LIVE_CLIENT_ID, NOMBA_LIVE_CLIENT_SECRET, NOMBA_TEST_CLIENT_ID, NOMBA_TEST_CLIENT_SECRET], Upstash Redis URL, API Key hash salt, Telegram Bot Token and Chat ID configurations).
   - Setup NestJS `ConfigModule` and a strongly-typed configuration service.
 - [x] **1.2. Database & Drizzle Setup with Turso/libSQL**
   - Use Drizzle ORM dependencies (`drizzle-orm`, `@libsql/client`) and dev dependencies (`drizzle-kit`).
@@ -52,14 +52,20 @@ This document outlines the sequential, step-by-step implementation tasks for the
 
 ## 3. EXTERNAL GATEWAY INTEGRATION (ProviderModule)
 - [ ] **3.1. Nomba API Client Implementation**
-  - Implement `NombaClient` wrapping the outward HTTP calls to:
-    - `POST /v1/checkout/order` (generate checkout links)
-    - `POST /v1/checkout/tokenized-card-payment` (charge saved cards)
+  - Implement `NombaClient` wrapping the outward HTTP calls to Nomba.
+  - Dynamically configure the base URL using `NOMBA_MODE` (if `live` -> `https://api.nomba.com`, else -> `https://sandbox.nomba.com`).
+  - Resolve authentication credentials dynamically:
+    - If `NOMBA_MODE` is `live`, exchange `NOMBA_LIVE_CLIENT_ID` and `NOMBA_LIVE_CLIENT_SECRET` for an `access_token`.
+    - Otherwise (e.g. `sandbox`), exchange `NOMBA_TEST_CLIENT_ID` and `NOMBA_TEST_CLIENT_SECRET` for an `access_token`.
+  - Ensure all outbound requests to Nomba endpoints (e.g. `POST /v1/checkout/order` and `POST /v1/checkout/tokenized-card-payment`) include the headers:
+    - `Authorization: Bearer <access_token>`
+    - `accountId: <NOMBA_MAIN_ACCOUNT_ID>` (Parent Account ID)
+  - Ensure all calls (like checkout links or tokenized card payment orders) are scoped to the sub-account ID by including `<NOMBA_SUB_ACCOUNT_ID>` (e.g., mapping to the relevant sub-account parameter in the request payload or endpoint config as required by Nomba's API).
   - Ensure outbound requests log the request and response payloads, especially status codes and failure reasons.
   - **Unhappy paths:**
     - Nomba `4xx` (e.g. `invalid_token`, `card_expired`, `insufficient_funds`) → classify as **non-retryable** failure; mark `Transaction` as `failed`, do NOT re-enqueue to `ChargeQueue`, push to `DunningQueue` only if `grace_period_days > 0`.
     - Nomba `5xx` or network timeout → classify as **retryable** failure; re-enqueue with exponential backoff without immediately marking the subscription as `past_due`.
-    - Nomba auth token expired → transparently refresh the Nomba access token (if OAuth-style) and retry once before surfacing the error.
+    - Nomba auth token expired → transparently refresh the Nomba access token by requesting a new one and retry once before surfacing the error.
     - Checkout link generation fails (Nomba 4xx on `POST /v1/checkout/order`) → return `502 Bad Gateway` to the caller; do NOT create a `Transaction` record.
 - [ ] **3.2. Idempotency Engine**
   - Build an idempotency service that generates and persists a unique, deterministic UUID in a local log before making any charging requests to Nomba.
