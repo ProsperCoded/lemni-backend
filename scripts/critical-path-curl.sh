@@ -157,7 +157,7 @@ echo ""
 # ============================================================================
 echo "🤖 STEP 5: Merchant Connects Telegram"
 echo "=================================="
-echo "POST $BASE_URL/api/v1/admin/telegram/connect"
+echo "POST $BASE_URL/api/v1/webhooks/telegram"
 echo ""
 
 TELEGRAM_CHAT_ID="123456789"
@@ -171,7 +171,7 @@ echo "Signature: $SIGNATURE"
 echo "Timestamp: $TIMESTAMP"
 echo ""
 
-TELEGRAM_RESPONSE=$(curl -s -X POST "$BASE_URL/api/v1/admin/telegram/connect" \
+TELEGRAM_RESPONSE=$(curl -s -X POST "$BASE_URL/api/v1/webhooks/telegram" \
   -H "Content-Type: application/json" \
   -d "{
     \"merchantId\": \"$MERCHANT_ID\",

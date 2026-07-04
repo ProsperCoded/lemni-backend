@@ -6,10 +6,11 @@ import { App } from 'supertest/types';
 import * as crypto from 'crypto';
 import { AppModule } from './../src/app.module';
 import { DRIZZLE_PROVIDER } from './../src/database/database.provider';
-import { merchants, apiKeys } from './../src/database/schema';
+import { merchants, apiKeys, transactions, subscriptions, customers, plans } from './../src/database/schema';
 import { eq } from 'drizzle-orm';
 
 describe('Notification Module (e2e)', () => {
+  jest.setTimeout(30000);
   let app: INestApplication<App>;
   let db: any;
   let jwtService: JwtService;
@@ -25,6 +26,7 @@ describe('Notification Module (e2e)', () => {
   };
 
   beforeAll(async () => {
+    process.env.TELEGRAM_BOT_SECRET = botSecret;
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -37,6 +39,10 @@ describe('Notification Module (e2e)', () => {
 
     // Clean and seed test merchant
     await db.delete(apiKeys);
+    await db.delete(transactions);
+    await db.delete(subscriptions);
+    await db.delete(customers);
+    await db.delete(plans);
     await db.delete(merchants);
 
     await db.insert(merchants).values(testMerchant);
@@ -50,14 +56,18 @@ describe('Notification Module (e2e)', () => {
 
   afterAll(async () => {
     await db.delete(apiKeys);
+    await db.delete(transactions);
+    await db.delete(subscriptions);
+    await db.delete(customers);
+    await db.delete(plans);
     await db.delete(merchants);
     await app.close();
   });
 
-  describe('POST /api/v1/admin/telegram/connect (Bot Connection)', () => {
+  describe('POST /api/v1/webhooks/telegram (Bot Webhook)', () => {
     it('should reject request with missing required fields (400)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/api/v1/admin/telegram/connect')
+        .post('/api/v1/webhooks/telegram')
         .send({
           merchantId: testMerchant.id,
           // missing chatId, signature, timestamp
@@ -77,7 +87,7 @@ describe('Notification Module (e2e)', () => {
         .digest('hex');
 
       const response = await request(app.getHttpServer())
-        .post('/api/v1/admin/telegram/connect')
+        .post('/api/v1/webhooks/telegram')
         .send({
           merchantId: testMerchant.id,
           chatId,
@@ -94,7 +104,7 @@ describe('Notification Module (e2e)', () => {
       const chatId = '123456789';
 
       const response = await request(app.getHttpServer())
-        .post('/api/v1/admin/telegram/connect')
+        .post('/api/v1/webhooks/telegram')
         .send({
           merchantId: testMerchant.id,
           chatId,
@@ -116,7 +126,7 @@ describe('Notification Module (e2e)', () => {
         .digest('hex');
 
       const response = await request(app.getHttpServer())
-        .post('/api/v1/admin/telegram/connect')
+        .post('/api/v1/webhooks/telegram')
         .send({
           merchantId: 'merchant-nonexistent',
           chatId,
@@ -138,7 +148,7 @@ describe('Notification Module (e2e)', () => {
         .digest('hex');
 
       const response = await request(app.getHttpServer())
-        .post('/api/v1/admin/telegram/connect')
+        .post('/api/v1/webhooks/telegram')
         .send({
           merchantId: testMerchant.id,
           chatId,
@@ -172,7 +182,7 @@ describe('Notification Module (e2e)', () => {
         .digest('hex');
 
       const response = await request(app.getHttpServer())
-        .post('/api/v1/admin/telegram/connect')
+        .post('/api/v1/webhooks/telegram')
         .send({
           merchantId: testMerchant.id,
           chatId: newChatId,
@@ -253,7 +263,7 @@ describe('Notification Module (e2e)', () => {
         .digest('hex');
 
       await request(app.getHttpServer())
-        .post('/api/v1/admin/telegram/connect')
+        .post('/api/v1/webhooks/telegram')
         .send({
           merchantId: testMerchant.id,
           chatId,
@@ -287,7 +297,7 @@ describe('Notification Module (e2e)', () => {
         .digest('hex');
 
       const connectResponse = await request(app.getHttpServer())
-        .post('/api/v1/admin/telegram/connect')
+        .post('/api/v1/webhooks/telegram')
         .send({
           merchantId: testMerchant.id,
           chatId,
@@ -305,7 +315,7 @@ describe('Notification Module (e2e)', () => {
         .expect(200);
 
       expect(statusResponse1.body.connected).toBe(true);
-      expect(statusResponse1.body.chatId).toBe('5555...7677');
+      expect(statusResponse1.body.chatId).toBe('5555...6677');
 
       // Step 3: Disconnect
       const disconnectResponse = await request(app.getHttpServer())

@@ -444,25 +444,6 @@ paths:
       summary: Retrieve transaction history
       tags:
         - merchant-dashboard/billing
-  /api/v1/admin/telegram/connect:
-    post:
-      description: Bot calls this endpoint after merchant sends /start command
-      operationId: NotificationController_connectTelegram
-      parameters: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                properties:
-                  message:
-                    type: string
-                  success:
-                    type: boolean
-          description: Telegram connected successfully
-      summary: Connect Telegram bot (called by bot after /start)
-      tags:
-        - merchant-dashboard/notifications
   /api/v1/admin/telegram/disconnect:
     delete:
       description: Clears the Telegram chat ID for the authenticated merchant
@@ -708,6 +689,25 @@ paths:
       summary: Create a subscription checkout session
       tags:
         - developer-apis/checkout
+  /api/v1/webhooks/telegram:
+    post:
+      description: Receives updates or connection requests from the Telegram bot
+      operationId: WebhookController_handleTelegramWebhook
+      parameters: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+          description: Telegram connected successfully
+      summary: Telegram bot webhook endpoint
+      tags:
+        - Webhook
   /auth/login:
     post:
       description: >-
@@ -935,6 +935,35 @@ paths:
         '409':
           description: Email already registered
       summary: Register a new merchant account
+      tags:
+        - merchant-dashboard/auth
+  /auth/telegram-link:
+    get:
+      description: >-
+        Returns a clickable Telegram link that opens the bot with merchant ID pre-filled. Merchant just needs to click
+        and the Telegram app opens with /start merchant_id ready to send.
+      operationId: AuthController_getTelegramLink
+      parameters: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  telegramUrl:
+                    description: Click this link to open Telegram with merchant ID auto-filled
+                    example: https://t.me/lemni_bot?start=550e8400-e29b-41d4-a716-446655440000
+                    format: uri
+                    type: string
+                type: object
+          description: Telegram link generated successfully
+        '400':
+          description: Telegram bot not configured
+        '401':
+          description: Missing or invalid access token
+      security:
+        - bearer: []
+      summary: Generate Telegram deep link for merchant support
       tags:
         - merchant-dashboard/auth
   /test-api-key:

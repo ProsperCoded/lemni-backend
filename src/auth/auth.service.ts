@@ -107,13 +107,46 @@ export class AuthService {
   }
 
   /**
+   * Generate unique username from merchant name
+   * Converts to lowercase, replaces spaces with hyphens, and appends counter if needed
+   */
+  private async generateUniqueUsername(name: string): Promise<string> {
+    // Base username: lowercase, replace spaces with hyphens, remove special chars
+    let baseUsername = name
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '')
+      .substring(0, 20);
+
+    // Check if username already exists
+    let username = baseUsername;
+    let counter = 1;
+    let exists = true;
+
+    while (exists) {
+      const result = await this.db
+        .select()
+        .from(merchants)
+        .where(eq(merchants.username, username));
+
+      exists = result.length > 0;
+      if (exists) {
+        counter++;
+        username = `${baseUsername}-${counter}`;
+      }
+    }
+
+    return username;
+  }
+
+  /**
    * Register a new merchant account
    */
   async signup(
     email: string,
     password: string,
     name: string,
-  ): Promise<{ id: string; email: string; name: string }> {
+  ): Promise<{ id: string; email: string; name: string; username: string }> {
     if (!password || password.length < 8) {
       throw new BadRequestException('Password must be at least 8 characters');
     }
@@ -129,15 +162,17 @@ export class AuthService {
 
     const merchantId = crypto.randomUUID();
     const hashedPassword = await bcrypt.hash(password, 10);
+    const username = await this.generateUniqueUsername(name);
 
     await this.db.insert(merchants).values({
       id: merchantId,
       email,
       name,
+      username,
       hashedPassword,
     });
 
-    return { id: merchantId, email, name };
+    return { id: merchantId, email, name, username };
   }
 
   /**
@@ -294,5 +329,35 @@ export class AuthService {
     this.logger.log(`Password successfully reset for merchant: ${email}`);
 
     return { success: true };
+  }
+
+  /**
+   * Generate Telegram deep link for merchant to contact support/admin
+   * Uses merchant username (not UUID) for privacy and better UX
+   * The bot will receive the username and look up the merchant
+   */
+  async generateTelegramDeepLink(merchantId: string): Promise<{ telegramUrl: string }> {
+    const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME');
+    if (!botUsername) {
+      throw new BadRequestException('Telegram bot username not configured');
+    }
+
+    // Get merchant to retrieve username
+    const result = await this.db
+      .select({ username: merchants.username })
+      .from(merchants)
+      .where(eq(merchants.id, merchantId));
+
+    if (result.length === 0) {
+      throw new BadRequestException('Merchant not found');
+    }
+
+    const merchantUsername = result[0].username;
+
+    // Telegram deep link format: https://t.me/bot_username?start=merchant_username
+    // The ?start parameter is passed to /start handler in the bot
+    const telegramUrl = `https://t.me/${botUsername}?start=${encodeURIComponent(merchantUsername)}`;
+
+    return { telegramUrl };
   }
 }

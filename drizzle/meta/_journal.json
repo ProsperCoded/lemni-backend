@@ -64,6 +64,13 @@
       "when": 1783160316277,
       "tag": "0008_majestic_dracula",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1783163236055,
+      "tag": "0009_add_merchant_username",
+      "breakpoints": true
     }
   ]
 }

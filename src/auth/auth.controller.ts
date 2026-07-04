@@ -75,6 +75,11 @@ export class AuthController {
         },
         email: { type: 'string', format: 'email', example: 'acme@example.com' },
         name: { type: 'string', example: 'Acme Corporation' },
+        username: {
+          type: 'string',
+          example: 'acme-corporation',
+          description: 'Unique username for Telegram and public references',
+        },
       },
     },
   })
@@ -264,6 +269,36 @@ export class AuthController {
       body.oldPassword,
       body.newPassword,
     );
+  }
+
+  @Get('telegram-link')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Generate Telegram deep link for merchant support',
+    description:
+      'Returns a clickable Telegram link that opens the bot with merchant username pre-filled. Merchant just needs to click and the Telegram app opens with /start merchant_username ready to send.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Telegram link generated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        telegramUrl: {
+          type: 'string',
+          format: 'uri',
+          example: 'https://t.me/lemni_bot?start=acme-corp',
+          description: 'Click this link to open Telegram with merchant username auto-filled',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 400, description: 'Telegram bot not configured or merchant not found' })
+  async getTelegramLink(@Request() req: ExpressRequest) {
+    const merchantId = (req.user as Record<string, unknown>).sub as string;
+    return await this.authService.generateTelegramDeepLink(merchantId);
   }
 }
 

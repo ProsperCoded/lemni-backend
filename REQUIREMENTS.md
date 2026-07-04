@@ -284,12 +284,12 @@ This document outlines the sequential, step-by-step implementation tasks for the
   - **Part A: Easy Telegram Connection Flow**
     - Merchant dashboard displays "🤖 Connect Telegram" button that links to Telegram deep link: `https://t.me/bot_username?start=merchant_<id>`
     - When merchant taps the link and types `/start`, the bot receives the merchant ID
-    - Bot calls Lemni API endpoint `POST /api/v1/admin/telegram/connect` with merchant_id and chat_id (with HMAC signature)
+    - Bot calls Lemni API endpoint `POST /api/v1/admin/telegram/webhook` with merchant_id and chat_id (with HMAC signature)
     - Lemni verifies the signature, stores chat_id in `merchants.telegram_chat_id`, and sends confirmation
     - Merchant sees dashboard update: "✅ Telegram Connected"
     - Merchant can also disconnect via `DELETE /api/v1/admin/telegram/disconnect` endpoint
     - **Endpoints Required:**
-      - `POST /api/v1/admin/telegram/connect` — Bot calls this to save chat_id (signature-verified)
+      - `POST /api/v1/admin/telegram/webhook` — Bot calls this to save chat_id (signature-verified)
       - `DELETE /api/v1/admin/telegram/disconnect` — Merchant calls to disconnect (JWT-protected)
       - `GET /api/v1/admin/telegram/status` — Check connection status (JWT-protected)
   

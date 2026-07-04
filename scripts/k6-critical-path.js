@@ -168,11 +168,11 @@ export default function () {
   const signature = crypto.hmac('sha256', TELEGRAM_BOT_SECRET, signingString, 'hex');
 
   const telegramBody = { merchantId, chatId, signature, timestamp };
-  console.log('POST /api/v1/admin/telegram/connect');
+  console.log('POST /api/v1/webhooks/telegram');
   console.log('Request:', JSON.stringify(telegramBody, null, 2));
 
   const telegramRes = http.post(
-    `${BASE_URL}/api/v1/admin/telegram/connect`,
+    `${BASE_URL}/api/v1/webhooks/telegram`,
     JSON.stringify(telegramBody),
     { headers: jsonHeaders() },
   );

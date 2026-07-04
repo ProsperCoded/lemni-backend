@@ -5,6 +5,7 @@ export const merchants = sqliteTable('merchants', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
+  username: text('username').notNull().unique(),
   hashedPassword: text('hashed_password'),
   webhookUrl: text('webhook_url'),
   telegramChatId: text('telegram_chat_id'),
@@ -73,6 +74,12 @@ export const subscriptions = sqliteTable('subscriptions', {
 
 export const transactions = sqliteTable('transactions', {
   id: text('id').primaryKey(),
+  merchantId: text('merchant_id')
+    .notNull()
+    .references(() => merchants.id, { onDelete: 'cascade' }),
+  customerId: text('customer_id')
+    .notNull()
+    .references(() => customers.id, { onDelete: 'cascade' }),
   subscriptionId: text('subscription_id').references(() => subscriptions.id, {
     onDelete: 'set null',
   }),
