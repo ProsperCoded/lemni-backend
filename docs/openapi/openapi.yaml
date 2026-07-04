@@ -496,11 +496,7 @@ paths:
         - merchant-dashboard/billing
   /api/v1/checkout/plans/{planId}/sessions:
     post:
-      description: |
-        **Public Plan Link Flow** — no authentication required.
-        This endpoint allows merchants to create public payment links for customers.
-        The merchant's frontend collects the customer email and calls this endpoint.
-        Returns a Nomba hosted checkout URL. Nomba then sends a webhook with the payment result.
+      description: Allows off-the-shelf payment links to initialize checkout sessions for customer emails.
       operationId: CheckoutController_createPublicPlanSession
       parameters:
         - description: The static pricing plan ID
@@ -546,15 +542,12 @@ paths:
           description: Checkout session generated
         '404':
           description: Plan not found
-      summary: Generate public plan checkout session (no auth required)
+      summary: Generate public plan checkout session
       tags:
         - developer-apis/checkout
   /api/v1/pay:
     post:
-      description: |
-        **Developer API Flow** — requires API Key authentication.
-        Your backend collects the customer email and calls this endpoint with a payment amount.
-        Returns a Nomba hosted checkout URL. Nomba then sends a webhook with the payment result.
+      description: Generates a payment URL for a singular checkout charge.
       operationId: CheckoutController_createOneTimePayment
       parameters:
         - description: Bearer <API_KEY>
@@ -602,7 +595,7 @@ paths:
           description: Checkout session successfully created
         '401':
           description: Unauthorized API key
-      summary: Create a one-time checkout session (API Key required)
+      summary: Create a one-time checkout session
       tags:
         - developer-apis/checkout
   /api/v1/sessions/{id}/status:
@@ -708,15 +701,6 @@ paths:
       summary: Create a subscription checkout session
       tags:
         - developer-apis/checkout
-  /api/v1/webhooks/nomba:
-    post:
-      operationId: WebhookController_handleNombaWebhook
-      parameters: []
-      responses:
-        '200':
-          description: ''
-      tags:
-        - Webhook
   /auth/login:
     post:
       description: >-

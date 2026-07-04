@@ -9,6 +9,7 @@ import {
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
+import { ApiExcludeEndpoint } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { WebhookService } from './webhook.service';
 import { NombaWebhookEventSchema } from './dto/webhook.dto';
@@ -25,6 +26,7 @@ export class WebhookController {
 
   @Post('nomba')
   @HttpCode(HttpStatus.OK)
+  @ApiExcludeEndpoint()
   async handleNombaWebhook(
     @Body() body: unknown,
     @Headers('nomba-signature') signature: string | undefined,
