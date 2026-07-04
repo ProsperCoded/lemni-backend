@@ -1,30 +1,28 @@
-openapi: 3.0.0
+components:
+  schemas: {}
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
 info:
+  contact: {}
+  description: Deterministic, highly resilient backend infrastructure for the Lemni Payment-as-a-Service (PaaS) engine.
   title: LEMNI PaaS Core Engine API
   version: 1.0.0
-  description: Deterministic, highly resilient backend infrastructure for the Lemni Payment-as-a-Service (PaaS) engine.
-servers: []
-security: []
+openapi: 3.0.0
 paths:
   /:
     get:
-      summary: Health check
-      description: Returns a simple hello world status message indicating the core app is up.
       operationId: AppController_getHello
       parameters: []
       responses:
         '200':
-          description: Service is healthy
-          content:
-            text/plain:
-              schema:
-                type: string
-                example: Hello World!
+          description: ''
       tags:
         - developer-apis/health
   /admin/api-keys/{id}:
     delete:
-      summary: Revoke an API key
       description: Marks the specified API key as inactive immediately, blocking any subsequent API requests using it.
       operationId: AuthController_revokeKey
       parameters:
@@ -33,83 +31,171 @@ paths:
           required: true
           schema:
             type: string
-            format: uuid
-            example: key_4a8df2a8264fb24e
       responses:
         '200':
           description: API key successfully revoked
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: API key successfully revoked
         '401':
           description: Unauthorized JWT session token
         '404':
           description: API key not found or does not belong to the merchant
       security:
         - bearer: []
+      summary: Revoke an API key
       tags:
         - merchant-dashboard/api-keys
   /admin/customers:
     post:
-      summary: Register a customer
       description: Registers a customer under the current merchant, preparing them for subscription charges.
       operationId: BillingController_registerCustomer
       parameters: []
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterCustomerDto'
+              properties:
+                email:
+                  example: customer@test.com
+                  format: email
+                  type: string
+                metadata:
+                  additionalProperties: true
+                  example:
+                    companyName: LemonInc
+                    department: Support
+                  type: object
+              required:
+                - email
+              type: object
+        required: true
       responses:
         '201':
-          description: Customer successfully registered
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerResponse'
+                properties:
+                  createdAt:
+                    example: '2026-07-04T02:00:00.000Z'
+                    format: date-time
+                    type: string
+                  email:
+                    example: customer@test.com
+                    format: email
+                    type: string
+                  id:
+                    example: cust_8a9d2ca8b10
+                    type: string
+                  merchantId:
+                    example: merchant-test-123
+                    type: string
+                  nombaToken:
+                    example: null
+                    nullable: true
+                    type: string
+                type: object
+          description: Customer successfully registered
         '401':
           description: Unauthorized JWT session token
       security:
         - bearer: []
+      summary: Register a customer
       tags:
-        - merchant-dashboard/customers
+        - merchant-dashboard/billing
   /admin/plans:
     post:
-      summary: Create a billing plan
       description: Registers a new recurring or one-time subscription plan in the system.
       operationId: BillingController_createPlan
       parameters: []
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreatePlanDto'
+              properties:
+                amount:
+                  example: 29.99
+                  format: float
+                  type: number
+                billingModel:
+                  default: recurring
+                  enum:
+                    - recurring
+                    - one_time
+                    - custom_input
+                  example: recurring
+                  type: string
+                gracePeriodDays:
+                  default: 0
+                  example: 3
+                  format: int32
+                  type: integer
+                interval:
+                  enum:
+                    - weekly
+                    - monthly
+                    - yearly
+                  example: monthly
+                  type: string
+                name:
+                  example: Standard Subscription Plan
+                  type: string
+                trialDays:
+                  default: 0
+                  example: 7
+                  format: int32
+                  type: integer
+                trialRequireCard:
+                  default: false
+                  example: true
+                  type: boolean
+              required:
+                - name
+                - amount
+              type: object
+        required: true
       responses:
         '201':
-          description: Plan successfully created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PlanResponse'
+                properties:
+                  amount:
+                    example: 29.99
+                    format: float
+                    type: number
+                  billingModel:
+                    example: recurring
+                    type: string
+                  gracePeriodDays:
+                    example: 3
+                    type: integer
+                  id:
+                    example: plan_7a8dca9
+                    type: string
+                  interval:
+                    example: monthly
+                    type: string
+                  merchantId:
+                    example: merchant-test-123
+                    type: string
+                  name:
+                    example: Standard Subscription Plan
+                    type: string
+                  trialDays:
+                    example: 7
+                    type: integer
+                  trialRequireCard:
+                    example: true
+                    type: boolean
+                type: object
+          description: Plan successfully created
         '401':
           description: Unauthorized JWT session token
       security:
         - bearer: []
+      summary: Create a billing plan
       tags:
-        - merchant-dashboard/plans
+        - merchant-dashboard/billing
   /admin/plans/{id}:
     delete:
-      summary: Delete a billing plan
       description: Removes a subscription plan if no active or trialing customers are attached to it.
       operationId: BillingController_deletePlan
       parameters:
@@ -118,7 +204,6 @@ paths:
           required: true
           schema:
             type: string
-            example: plan_9f82dca8b274c102
       responses:
         '204':
           description: Plan successfully deleted
@@ -130,11 +215,11 @@ paths:
           description: Plan not found
       security:
         - bearer: []
+      summary: Delete a billing plan
       tags:
-        - merchant-dashboard/plans
+        - merchant-dashboard/billing
   /admin/subscriptions/{id}/reactivate:
     post:
-      summary: Reactivate a canceled subscription
       description: Resets the billing cycle start date and shifts the subscription back to active status.
       operationId: BillingController_reactivateSubscription
       parameters:
@@ -143,14 +228,39 @@ paths:
           required: true
           schema:
             type: string
-            example: sub_a28deca90c274b12
       responses:
         '200':
-          description: Subscription successfully reactivated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubscriptionResponse'
+                properties:
+                  createdAt:
+                    example: '2026-07-04T02:00:00.000Z'
+                    format: date-time
+                    type: string
+                  currentPeriodEnd:
+                    example: '2026-08-04T02:00:00.000Z'
+                    format: date-time
+                    type: string
+                  customerId:
+                    example: cust_8a9d2ca8b10
+                    type: string
+                  id:
+                    example: sub_a28deca9
+                    type: string
+                  planId:
+                    example: plan_7a8dca9
+                    type: string
+                  status:
+                    example: active
+                    type: string
+                  trialEnd:
+                    example: null
+                    format: date-time
+                    nullable: true
+                    type: string
+                type: object
+          description: Subscription successfully reactivated
         '400':
           description: Subscription is not canceled or card is missing
         '401':
@@ -159,21 +269,12 @@ paths:
           description: Subscription or associated plan not found
       security:
         - bearer: []
+      summary: Reactivate a canceled subscription
       tags:
-        - merchant-dashboard/subscriptions
+        - merchant-dashboard/billing
   /api/v1/checkout/plans/{planId}/sessions:
     post:
-      summary: Generate public plan checkout session
-      description: |
-        Initializes a checkout session via a public plan link. This flow is used to register a customer using an off-the-shelf payment page.
-
-        **Sequence Flow & Redirect Hops:**
-        1. **Form #1 (Email Input Form on the Frontend):** The customer loads the public plan link on the frontend website. The frontend displays **Form #1** requesting the customer's email address. Once the customer inputs their email and submits the form, the frontend calls this endpoint (`POST /api/v1/checkout/plans/{planId}/sessions`) containing the email and the plan ID.
-        2. **Session Creation:** The server initializes a checkout session, mapping the customer's email and the specific plan.
-        3. **Form #2 (Nomba Card/Payment Form Redirect):** The endpoint returns a checkout session URL. The frontend redirects the user's browser to this URL, which displays **Form #2** (Nomba's secure card/payment form).
-        4. **Redirect / Callback Resolution:** After completing or canceling the payment on **Form #2**, the user is redirected back:
-           - If a `callbackUrl` was provided in the request payload or metadata, the browser is redirected to that specific URL.
-           - If no `callbackUrl` is provided, the system falls back to the merchant's configured `defaultRedirectUrl` to route the customer back to the merchant dashboard or website.
+      description: Allows off-the-shelf payment links to initialize checkout sessions for customer emails.
       operationId: CheckoutController_createPublicPlanSession
       parameters:
         - description: The static pricing plan ID
@@ -182,36 +283,49 @@ paths:
           required: true
           schema:
             type: string
-            example: plan_9f82dca8b274c102
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PublicPlanSessionDto'
+              properties:
+                callbackUrl:
+                  example: https://mywebsite.com/public-success
+                  format: uri
+                  type: string
+                email:
+                  example: buyer@gmail.com
+                  format: email
+                  type: string
+              required:
+                - email
+              type: object
+        required: true
       responses:
         '200':
-          description: Checkout session generated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CheckoutSessionResponse'
+                properties:
+                  checkoutUrl:
+                    example: https://checkout.nomba.com/pay/mock_link_123
+                    format: uri
+                    type: string
+                  sessionId:
+                    example: tx_1234567890abcdef
+                    type: string
+                  subscriptionId:
+                    example: sub_a28deca9
+                    type: string
+                type: object
+          description: Checkout session generated
         '404':
           description: Plan not found
+      summary: Generate public plan checkout session
       tags:
         - developer-apis/checkout
   /api/v1/pay:
     post:
-      summary: Create a one-time checkout session
-      description: |
-        Generates a checkout session URL for a single, one-time payment charge.
-
-        **Sequence Flow & Redirect Hops:**
-        1. **API Trigger:** The merchant's backend or frontend application calls this endpoint to initiate a charge.
-        2. **Form #2 (Nomba Card/Payment Form Redirect):** The response returns a secure checkout session URL. The application redirects the customer's browser to this checkout page, loading **Form #2** (Nomba's hosted card/payment form).
-        3. **Redirect / Callback Resolution:** Upon completion of the payment step on **Form #2**:
-           - The gateway redirects the user to the specified `callbackUrl` provided in the request payload, appending transaction details.
-           - If no custom `callbackUrl` was provided, the platform resolves to the merchant's configured `defaultRedirectUrl` to return the customer to the merchant's storefront.
+      description: Generates a payment URL for a singular checkout charge.
       operationId: CheckoutController_createOneTimePayment
       parameters:
         - description: Bearer <API_KEY>
@@ -220,27 +334,50 @@ paths:
           required: true
           schema:
             type: string
-            example: Bearer sk_test_550e8400_e29b_41d4_a716_446655440000
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OneTimePaymentDto'
+              properties:
+                amount:
+                  example: 5000
+                  format: float
+                  type: number
+                callbackUrl:
+                  example: https://mywebsite.com/payment-success
+                  format: uri
+                  type: string
+                email:
+                  example: payer@test.com
+                  format: email
+                  type: string
+              required:
+                - amount
+                - email
+              type: object
+        required: true
       responses:
         '200':
-          description: Checkout session successfully created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CheckoutSessionResponse'
+                properties:
+                  checkoutUrl:
+                    example: https://checkout.nomba.com/pay/mock_link_123
+                    format: uri
+                    type: string
+                  sessionId:
+                    example: tx_1234567890abcdef
+                    type: string
+                type: object
+          description: Checkout session successfully created
         '401':
           description: Unauthorized API key
+      summary: Create a one-time checkout session
       tags:
         - developer-apis/checkout
   /api/v1/sessions/{id}/status:
     get:
-      summary: Poll checkout session status
       description: Enables frontend checkouts or backend applications to poll for session completion status.
       operationId: CheckoutController_getCheckoutSessionStatus
       parameters:
@@ -250,30 +387,44 @@ paths:
           required: true
           schema:
             type: string
-            example: tx_1234567890abcdef
       responses:
         '200':
-          description: Session status retrieved successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SessionStatusResponse'
+                properties:
+                  amount:
+                    example: 5000
+                    format: float
+                    type: number
+                  createdAt:
+                    example: '2026-07-04T02:00:00.000Z'
+                    format: date-time
+                    type: string
+                  nombaRef:
+                    example: ref_nomba_992c
+                    nullable: true
+                    type: string
+                  sessionId:
+                    example: tx_1234567890abcdef
+                    type: string
+                  status:
+                    enum:
+                      - pending
+                      - success
+                      - failed
+                    example: pending
+                    type: string
+                type: object
+          description: Session status retrieved successfully
         '404':
           description: Session not found
+      summary: Poll checkout session status
       tags:
         - developer-apis/checkout
   /api/v1/subscribe:
     post:
-      summary: Create a subscription checkout session
-      description: |
-        Generates a checkout session URL to register a customer for a recurring pricing/subscription plan.
-
-        **Sequence Flow & Redirect Hops:**
-        1. **API Trigger:** The application calls this endpoint specifying a customer and a subscription plan.
-        2. **Form #2 (Nomba Card/Payment Form Redirect):** The response returns a checkout session URL. The customer is redirected to this link to load **Form #2** (Nomba's card input/authorization form) where they authorize their card for recurring charges.
-        3. **Redirect / Callback Resolution:** Once the customer authorizes their card or cancels the process:
-           - The system redirects the customer to the `callbackUrl` if provided in the session request.
-           - If not provided, the flow redirects back using the merchant's fallback `defaultRedirectUrl`.
+      description: Generates a payment URL to register a customer to a recurring pricing plan.
       operationId: CheckoutController_createSubscriptionPayment
       parameters:
         - description: Bearer <API_KEY>
@@ -282,275 +433,60 @@ paths:
           required: true
           schema:
             type: string
-            example: Bearer sk_test_550e8400_e29b_41d4_a716_446655440000
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SubscriptionPaymentDto'
+              properties:
+                callbackUrl:
+                  example: https://mywebsite.com/sub-success
+                  format: uri
+                  type: string
+                email:
+                  example: subscriber@test.com
+                  format: email
+                  type: string
+                planId:
+                  example: plan_7a8dca9
+                  type: string
+              required:
+                - planId
+                - email
+              type: object
+        required: true
       responses:
         '200':
-          description: Checkout session successfully created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CheckoutSessionResponse'
+                properties:
+                  checkoutUrl:
+                    example: https://checkout.nomba.com/pay/mock_link_123
+                    format: uri
+                    type: string
+                  sessionId:
+                    example: tx_1234567890abcdef
+                    type: string
+                  subscriptionId:
+                    example: sub_a28deca9
+                    type: string
+                type: object
+          description: Checkout session successfully created
         '401':
           description: Unauthorized API key
         '404':
           description: Plan not found
+      summary: Create a subscription checkout session
       tags:
         - developer-apis/checkout
   /test-api-key:
     get:
-      summary: Test API key auth
-      description: Simple test route protected by ApiKeyGuard to verify api authentication context.
       operationId: AppController_testApiKey
-      parameters:
-        - description: Bearer <API_KEY>
-          in: header
-          name: Authorization
-          required: true
-          schema:
-            type: string
-            example: Bearer sk_test_550e8400_e29b_41d4_a716_446655440000
+      parameters: []
       responses:
         '200':
-          description: Key is valid
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: authorized
+          description: ''
       tags:
         - developer-apis/health
-components:
-  securitySchemes:
-    bearer:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-  schemas:
-    RegisterCustomerDto:
-      type: object
-      required:
-        - email
-      properties:
-        email:
-          type: string
-          format: email
-          example: customer@test.com
-        metadata:
-          type: object
-          additionalProperties: true
-          example:
-            companyName: LemonInc
-            department: Support
-    CustomerResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          example: cust_8a9d2ca8b10
-        merchantId:
-          type: string
-          example: merchant-test-123
-        email:
-          type: string
-          format: email
-          example: customer@test.com
-        nombaToken:
-          type: string
-          nullable: true
-          example: tok_card_274ba
-        createdAt:
-          type: string
-          format: date-time
-          example: 2026-07-04T02:00:00.000Z
-    CreatePlanDto:
-      type: object
-      required:
-        - name
-        - amount
-      properties:
-        name:
-          type: string
-          example: Standard Subscription Plan
-        amount:
-          type: number
-          format: float
-          example: 29.99
-        billingModel:
-          type: string
-          enum: [recurring, one_time, custom_input]
-          default: recurring
-          example: recurring
-        interval:
-          type: string
-          enum: [weekly, monthly, yearly]
-          example: monthly
-        trialDays:
-          type: integer
-          format: int32
-          default: 0
-          example: 7
-        trialRequireCard:
-          type: boolean
-          default: false
-          example: true
-        gracePeriodDays:
-          type: integer
-          format: int32
-          default: 0
-          example: 3
-    PlanResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          example: plan_7a8dca9
-        merchantId:
-          type: string
-          example: merchant-test-123
-        name:
-          type: string
-          example: Standard Subscription Plan
-        amount:
-          type: number
-          format: float
-          example: 29.99
-        billingModel:
-          type: string
-          enum: [recurring, one_time, custom_input]
-          example: recurring
-        interval:
-          type: string
-          enum: [weekly, monthly, yearly]
-          example: monthly
-        trialDays:
-          type: integer
-          format: int32
-          example: 7
-        trialRequireCard:
-          type: boolean
-          example: true
-        gracePeriodDays:
-          type: integer
-          format: int32
-          example: 3
-    SubscriptionResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          example: sub_a28deca9
-        customerId:
-          type: string
-          example: cust_8a9d2ca8b10
-        planId:
-          type: string
-          example: plan_7a8dca9
-        status:
-          type: string
-          enum: [trialing, active, past_due, canceled]
-          example: active
-        currentPeriodEnd:
-          type: string
-          format: date-time
-          example: 2026-08-04T02:00:00.000Z
-        trialEnd:
-          type: string
-          format: date-time
-          nullable: true
-          example: null
-        createdAt:
-          type: string
-          format: date-time
-          example: 2026-07-04T02:00:00.000Z
-    OneTimePaymentDto:
-      type: object
-      required:
-        - amount
-        - email
-      properties:
-        amount:
-          type: number
-          format: float
-          example: 5000.00
-        email:
-          type: string
-          format: email
-          example: payer@test.com
-        callbackUrl:
-          type: string
-          format: uri
-          example: https://mywebsite.com/payment-success
-    SubscriptionPaymentDto:
-      type: object
-      required:
-        - planId
-        - email
-      properties:
-        planId:
-          type: string
-          example: plan_7a8dca9
-        email:
-          type: string
-          format: email
-          example: subscriber@test.com
-        callbackUrl:
-          type: string
-          format: uri
-          example: https://mywebsite.com/sub-success
-    PublicPlanSessionDto:
-      type: object
-      required:
-        - email
-      properties:
-        email:
-          type: string
-          format: email
-          example: buyer@gmail.com
-        callbackUrl:
-          type: string
-          format: uri
-          example: https://mywebsite.com/public-success
-    CheckoutSessionResponse:
-      type: object
-      properties:
-        sessionId:
-          type: string
-          example: tx_1234567890abcdef
-        subscriptionId:
-          type: string
-          example: sub_a28deca9
-        checkoutUrl:
-          type: string
-          format: uri
-          example: https://checkout.nomba.com/pay/mock_link_123
-    SessionStatusResponse:
-      type: object
-      properties:
-        sessionId:
-          type: string
-          example: tx_1234567890abcdef
-        amount:
-          type: number
-          format: float
-          example: 5000.00
-        status:
-          type: string
-          enum: [pending, success, failed]
-          example: pending
-        nombaRef:
-          type: string
-          nullable: true
-          example: ref_nomba_992c
-        createdAt:
-          type: string
-          format: date-time
-          example: 2026-07-04T02:00:00.000Z
+servers: []
+tags: []

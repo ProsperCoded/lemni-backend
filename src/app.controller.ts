@@ -3,6 +3,9 @@ import { AppService } from './app.service';
 
 import { ApiKeyGuard } from './auth/guards/api-key.guard';
 
+import { ApiTags } from '@nestjs/swagger';
+
+@ApiTags('developer-apis/health')
 @Controller()
 export class AppController {
   constructor(private readonly appService: AppService) {}

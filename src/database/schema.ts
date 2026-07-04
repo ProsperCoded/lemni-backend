@@ -76,3 +76,14 @@ export const transactions = sqliteTable('transactions', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const dlqJobs = sqliteTable('dlq_jobs', {
+  id: text('id').primaryKey(), // BullMQ job ID
+  subscriptionId: text('subscription_id')
+    .references(() => subscriptions.id, { onDelete: 'set null' }),
+  payload: text('payload').notNull(), // Full job payload JSON
+  errorReason: text('error_reason').notNull(),
+  retryHistory: text('retry_history'), // JSON array of retry attempt timestamps and reasons
+  failedAt: text('failed_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+

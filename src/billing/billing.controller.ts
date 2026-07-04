@@ -6,13 +6,13 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CreatePlanSchema, RegisterCustomerSchema } from './dto/billing.dto';
 import type { CreatePlanDto, RegisterCustomerDto } from './dto/billing.dto';
 
+@ApiTags('merchant-dashboard/billing')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('admin')
 export class BillingController {
   constructor(private readonly billingService: BillingService) {}
 
-  @ApiTags('merchant-dashboard/plans')
   @Post('plans')
   @UsePipes(new ZodValidationPipe(CreatePlanSchema))
   @ApiOperation({
@@ -61,7 +61,6 @@ export class BillingController {
     return this.billingService.createPlan(merchantId, body);
   }
 
-  @ApiTags('merchant-dashboard/plans')
   @Delete('plans/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
@@ -77,7 +76,6 @@ export class BillingController {
     await this.billingService.deletePlan(merchantId, id);
   }
 
-  @ApiTags('merchant-dashboard/customers')
   @Post('customers')
   @UsePipes(new ZodValidationPipe(RegisterCustomerSchema))
   @ApiOperation({
@@ -121,7 +119,6 @@ export class BillingController {
     return this.billingService.registerCustomer(merchantId, body);
   }
 
-  @ApiTags('merchant-dashboard/subscriptions')
   @Post('subscriptions/:id/reactivate')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
