@@ -49,6 +49,14 @@ export class NotificationService {
           `${baseInfo}`
         );
 
+      case 'trial_started':
+        return (
+          `🎉 <b>Trial Started</b>\n\n` +
+          `Subscription: ${payload.subscriptionId}\n` +
+          `${payload.reason || 'No card required for this trial'}\n` +
+          `${baseInfo}`
+        );
+
       case 'trial_ended':
         return (
           `⏰ <b>Trial Period Ended</b>\n\n` +

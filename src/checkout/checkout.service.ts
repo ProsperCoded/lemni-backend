@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Queue } from 'bullmq';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
 import { NombaClient } from '../provider/nomba.client';
@@ -22,6 +23,7 @@ import {
 import { eq, and, gte } from 'drizzle-orm';
 import * as crypto from 'crypto';
 import { EmailService } from '../common/services/email.service';
+import type { NotificationJobPayload } from '../notification/dto/notification.dto';
 
 @Injectable()
 export class CheckoutService {
@@ -32,6 +34,8 @@ export class CheckoutService {
     private readonly nombaClient: NombaClient,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
+    @Inject('NOTIFICATION_QUEUE')
+    private readonly notificationQueue: Queue<NotificationJobPayload>,
   ) {}
 
   /**
@@ -223,33 +227,22 @@ export class CheckoutService {
     );
 
     const subscriptionId = `sub_${crypto.randomBytes(8).toString('hex')}`;
-    const transactionId = `tx_${crypto.randomBytes(12).toString('hex')}`;
 
     const now = new Date();
-    const trialEnd =
-      plan.trialDays > 0
-        ? new Date(
-            now.getTime() + plan.trialDays * 24 * 60 * 60 * 1000,
-          ).toISOString()
-        : null;
+    const isTrial = plan.trialDays > 0;
+    const trialEnd = isTrial
+      ? new Date(
+          now.getTime() + plan.trialDays * 24 * 60 * 60 * 1000,
+        ).toISOString()
+      : null;
 
     // Create pending subscription record
     await this.db.insert(subscriptions).values({
       id: subscriptionId,
       customerId: customer.id,
       planId: plan.id,
-      status: plan.trialDays > 0 ? 'trialing' : 'active',
+      status: isTrial ? 'trialing' : 'active',
       trialEnd,
-    });
-
-    // Create pending transaction record
-    await this.db.insert(transactions).values({
-      id: transactionId,
-      merchantId,
-      customerId: customer.id,
-      subscriptionId,
-      amount: plan.amount,
-      status: 'pending',
     });
 
     if (isNewCustomerEmail) {
@@ -262,15 +255,61 @@ export class CheckoutService {
       });
     }
 
+    // Trial with no card required: no Nomba session at all — the customer
+    // isn't charged and isn't asked for payment details. Notify and return.
+    if (isTrial && !plan.trialRequireCard) {
+      await this.logAuditEvent({
+        merchantId,
+        customerId: customer.id,
+        subscriptionId,
+        action: 'trial_started',
+        details: `Started ${plan.trialDays}-day trial for plan "${plan.name}" (no card required)`,
+      });
+
+      await this.notificationQueue.add('notification', {
+        merchantId,
+        eventType: 'trial_started',
+        subscriptionId,
+        customerId: customer.id,
+        reason: `Plan: ${plan.name}. No card on file — trial ends ${trialEnd}.`,
+        timestamp: new Date().toISOString(),
+      });
+
+      return {
+        sessionId: null,
+        subscriptionId,
+        checkoutUrl: null,
+        trialing: true,
+      };
+    }
+
+    const transactionId = `tx_${crypto.randomBytes(12).toString('hex')}`;
+
+    // Trial WITH card required: card must be tokenized for future auto-billing,
+    // but the customer must not be charged the plan amount during the trial.
+    if (isTrial && plan.trialRequireCard) {
+      throw new Error(
+        'Zero-amount trial-with-card checkout is not yet implemented — ' +
+          'awaiting confirmation of Nomba zero-amount/card-verification support.',
+      );
+    }
+
+    // Create pending transaction record (non-trial: charge full amount now)
+    await this.db.insert(transactions).values({
+      id: transactionId,
+      merchantId,
+      customerId: customer.id,
+      subscriptionId,
+      amount: plan.amount,
+      status: 'pending',
+    });
+
     await this.logAuditEvent({
       merchantId,
       customerId: customer.id,
       subscriptionId,
-      action: plan.trialDays > 0 ? 'trial_started' : 'subscription_created',
-      details:
-        plan.trialDays > 0
-          ? `Started ${plan.trialDays}-day trial for plan "${plan.name}"`
-          : `Subscription created for plan "${plan.name}" (₦${plan.amount})`,
+      action: 'subscription_created',
+      details: `Subscription created for plan "${plan.name}" (₦${plan.amount})`,
     });
 
     // Recurring subscriptions must be charged automatically on renewal,
@@ -579,6 +618,7 @@ export class CheckoutService {
         billingModel: plans.billingModel,
         interval: plans.interval,
         trialDays: plans.trialDays,
+        trialRequireCard: plans.trialRequireCard,
       })
       .from(plans)
       .where(eq(plans.id, planId));

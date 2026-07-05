@@ -5,6 +5,7 @@ export const NotificationJobPayloadSchema = z.object({
   eventType: z.enum([
     'payment_success',
     'payment_failed',
+    'trial_started',
     'trial_ended',
     'grace_period_exhausted',
     'subscription_canceled',

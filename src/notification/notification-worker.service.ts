@@ -35,6 +35,12 @@ const EVENT_META: Record<
     describe: (p) =>
       `Payment attempt failed for subscription ${p.subscriptionId ?? 'n/a'}: ${p.reason ?? 'Unknown reason'}.`,
   },
+  trial_started: {
+    category: 'subscription',
+    severity: 'success',
+    describe: (p) =>
+      `Trial started for subscription ${p.subscriptionId ?? 'n/a'}. ${p.reason ?? 'No card required for this trial.'}`,
+  },
   trial_ended: {
     category: 'subscription',
     severity: 'info',
