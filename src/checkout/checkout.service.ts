@@ -286,21 +286,17 @@ export class CheckoutService {
     const transactionId = `tx_${crypto.randomBytes(12).toString('hex')}`;
 
     // Trial WITH card required: card must be tokenized for future auto-billing,
-    // but the customer must not be charged the plan amount during the trial.
-    if (isTrial && plan.trialRequireCard) {
-      throw new Error(
-        'Zero-amount trial-with-card checkout is not yet implemented — ' +
-          'awaiting confirmation of Nomba zero-amount/card-verification support.',
-      );
-    }
+    // but the customer must not be charged the plan amount during the trial —
+    // the checkout order is created for ₦0 (card verification only).
+    const chargeAmount = isTrial && plan.trialRequireCard ? 0 : plan.amount;
 
-    // Create pending transaction record (non-trial: charge full amount now)
+    // Create pending transaction record
     await this.db.insert(transactions).values({
       id: transactionId,
       merchantId,
       customerId: customer.id,
       subscriptionId,
-      amount: plan.amount,
+      amount: chargeAmount,
       status: 'pending',
     });
 
@@ -308,9 +304,22 @@ export class CheckoutService {
       merchantId,
       customerId: customer.id,
       subscriptionId,
-      action: 'subscription_created',
-      details: `Subscription created for plan "${plan.name}" (₦${plan.amount})`,
+      action: isTrial ? 'trial_started' : 'subscription_created',
+      details: isTrial
+        ? `Started ${plan.trialDays}-day trial for plan "${plan.name}" (card verified, ₦0 charged, then ₦${plan.amount})`
+        : `Subscription created for plan "${plan.name}" (₦${plan.amount})`,
     });
+
+    if (isTrial) {
+      await this.notificationQueue.add('notification', {
+        merchantId,
+        eventType: 'trial_started',
+        subscriptionId,
+        customerId: customer.id,
+        reason: `Plan: ${plan.name}. Card verified, ₦0 charged now — trial ends ${trialEnd}.`,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     // Recurring subscriptions must be charged automatically on renewal,
     // so the first checkout is restricted to Card (no bank Transfer) and
@@ -320,8 +329,10 @@ export class CheckoutService {
     const subAccountId = this.configService.get<string>('NOMBA_SUB_ACCOUNT_ID');
     const orderPayload = {
       order: {
-        amount: plan.amount,
-        description: `Subscription - ${plan.name} - ${subscriptionId}`,
+        amount: chargeAmount,
+        description: isTrial
+          ? `Trial Card Verification - ${plan.name} - ${subscriptionId}`
+          : `Subscription - ${plan.name} - ${subscriptionId}`,
         country: 'NG',
         currency: 'NGN',
         customerEmail: customer.email,

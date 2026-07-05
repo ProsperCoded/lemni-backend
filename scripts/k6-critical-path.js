@@ -118,7 +118,7 @@ export default function () {
     amount: 5000,
     billingModel: 'recurring',
     interval: 'monthly',
-    trialDays: 7,
+    trialDays: 0,
     gracePeriodDays: 3,
   };
   console.log('POST /admin/plans');
