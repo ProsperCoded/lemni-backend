@@ -243,9 +243,10 @@ export function renderPaymentFailedAlertEmail(
     currency: 'NGN',
   }).format(amount);
 
-  const graceText = gracePeriodDays > 0
-    ? `We have initiated a grace period of <strong>${gracePeriodDays} days</strong> to keep your access active while you resolve this.`
-    : `To prevent service interruption, please update your billing details immediately.`;
+  const graceText =
+    gracePeriodDays > 0
+      ? `We have initiated a grace period of <strong>${gracePeriodDays} days</strong> to keep your access active while you resolve this.`
+      : `To prevent service interruption, please update your billing details immediately.`;
 
   const cardUpdateLink = subscriptionId
     ? `https://lemni.app/update-payment?subscription=${subscriptionId}&email=${encodeURIComponent(customerEmail)}`
@@ -268,11 +269,15 @@ export function renderPaymentFailedAlertEmail(
     <p class="paragraph">
       Common reasons include insufficient funds, expired card, or bank declines. Please update your payment method:
     </p>
-    ${cardUpdateLink ? `
+    ${
+      cardUpdateLink
+        ? `
     <div style="text-align: center; margin: 24px 0;">
       <a href="${cardUpdateLink}" class="button" style="background-color: #059669; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">Update Payment Method</a>
     </div>
-    ` : ''}
+    `
+        : ''
+    }
     <p class="paragraph">
       If no action is taken, your subscription may be suspended or canceled automatically.
     </p>

@@ -164,7 +164,11 @@ describe('Notification Module (e2e)', () => {
           update_id: 10002,
           message: {
             message_id: 2,
-            from: { id: parseInt(newChatId), is_bot: false, first_name: 'Test' },
+            from: {
+              id: parseInt(newChatId),
+              is_bot: false,
+              first_name: 'Test',
+            },
             chat: { id: parseInt(newChatId), type: 'private' },
             date: Math.floor(Date.now() / 1000),
             text: `/start ${testMerchant.username}`,

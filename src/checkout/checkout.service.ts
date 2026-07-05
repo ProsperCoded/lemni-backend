@@ -95,9 +95,7 @@ export class CheckoutService {
     );
 
     const transactionId = `tx_${crypto.randomBytes(12).toString('hex')}`;
-    const subAccountId = this.configService.get<string>(
-      'NOMBA_SUB_ACCOUNT_ID',
-    );
+    const subAccountId = this.configService.get<string>('NOMBA_SUB_ACCOUNT_ID');
 
     // Nomba checkout order payload
     const orderPayload = {
@@ -204,9 +202,7 @@ export class CheckoutService {
     // requests Nomba to tokenize the card. The token arrives later via
     // the payment_success webhook (see webhook.service.ts) and is stored
     // on customers.nombaToken for use by DunningWorkerService.
-    const subAccountId = this.configService.get<string>(
-      'NOMBA_SUB_ACCOUNT_ID',
-    );
+    const subAccountId = this.configService.get<string>('NOMBA_SUB_ACCOUNT_ID');
     const orderPayload = {
       order: {
         amount: plan.amount,
@@ -434,9 +430,7 @@ export class CheckoutService {
     }
 
     const sessionId = `card_upd_${crypto.randomBytes(12).toString('hex')}`;
-    const subAccountId = this.configService.get<string>(
-      'NOMBA_SUB_ACCOUNT_ID',
-    );
+    const subAccountId = this.configService.get<string>('NOMBA_SUB_ACCOUNT_ID');
 
     const orderPayload = {
       order: {

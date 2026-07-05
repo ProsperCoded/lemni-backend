@@ -279,7 +279,8 @@ export class AuthController {
       properties: {
         error: {
           type: 'string',
-          example: 'Invalid email, incorrect old password, or weak new password (minimum 8 characters)',
+          example:
+            'Invalid email, incorrect old password, or weak new password (minimum 8 characters)',
           description: 'Error message',
         },
       },
@@ -350,7 +351,8 @@ export class AuthController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Reset code sent or email not found (for security, same message for both cases)',
+    description:
+      'Reset code sent or email not found (for security, same message for both cases)',
     schema: {
       type: 'object',
       properties: {
@@ -405,7 +407,8 @@ export class AuthController {
         resetToken: {
           type: 'string',
           example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-          description: 'Short-lived token for password reset (valid for 15 minutes)',
+          description:
+            'Short-lived token for password reset (valid for 15 minutes)',
         },
       },
     },
@@ -432,7 +435,8 @@ export class AuthController {
   @HttpCode(200)
   @ApiOperation({
     summary: 'Reset password using token',
-    description: 'Resets the password utilizing the short-lived reset token obtained from OTP verification.',
+    description:
+      'Resets the password utilizing the short-lived reset token obtained from OTP verification.',
   })
   @ApiBody({
     schema: {
@@ -442,7 +446,8 @@ export class AuthController {
         token: {
           type: 'string',
           example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-          description: 'Reset token from verify-reset-otp response (valid for 15 minutes)',
+          description:
+            'Reset token from verify-reset-otp response (valid for 15 minutes)',
         },
         newPassword: {
           type: 'string',
@@ -481,7 +486,8 @@ export class AuthController {
       properties: {
         error: {
           type: 'string',
-          example: 'Invalid or expired token, or password does not meet requirements (minimum 8 characters)',
+          example:
+            'Invalid or expired token, or password does not meet requirements (minimum 8 characters)',
           description: 'Error message',
         },
       },

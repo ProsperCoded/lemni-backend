@@ -114,7 +114,10 @@ describe('Telegram Webhook Flow (e2e)', () => {
 
       const webhookRes = await request(app.getHttpServer())
         .post('/api/v1/webhooks/telegram')
-        .set('x-telegram-bot-api-secret-token', process.env.TELEGRAM_BOT_SECRET!)
+        .set(
+          'x-telegram-bot-api-secret-token',
+          process.env.TELEGRAM_BOT_SECRET!,
+        )
         .send(telegramUpdate);
 
       expect(webhookRes.status).toBe(200);
@@ -195,7 +198,10 @@ describe('Telegram Webhook Flow (e2e)', () => {
 
       const webhookRes = await request(app.getHttpServer())
         .post('/api/v1/webhooks/telegram')
-        .set('x-telegram-bot-api-secret-token', process.env.TELEGRAM_BOT_SECRET!)
+        .set(
+          'x-telegram-bot-api-secret-token',
+          process.env.TELEGRAM_BOT_SECRET!,
+        )
         .send(telegramUpdate);
 
       expect(webhookRes.status).toBe(200);
@@ -223,7 +229,10 @@ describe('Telegram Webhook Flow (e2e)', () => {
 
       const webhookRes = await request(app.getHttpServer())
         .post('/api/v1/webhooks/telegram')
-        .set('x-telegram-bot-api-secret-token', process.env.TELEGRAM_BOT_SECRET!)
+        .set(
+          'x-telegram-bot-api-secret-token',
+          process.env.TELEGRAM_BOT_SECRET!,
+        )
         .send(telegramUpdate);
 
       expect(webhookRes.status).toBe(200);

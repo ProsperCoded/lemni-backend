@@ -54,7 +54,9 @@ export class WebhookController {
     @Headers('nomba-timestamp') timestamp: string | undefined,
     @Ip() ip: string,
   ) {
-    this.logger.debug('[Nomba Webhook] Raw body received: ' + JSON.stringify(body));
+    this.logger.debug(
+      '[Nomba Webhook] Raw body received: ' + JSON.stringify(body),
+    );
 
     const parsed = NombaWebhookEventSchema.safeParse(body);
     if (!parsed.success) {
@@ -93,7 +95,8 @@ export class WebhookController {
     const result = await this.webhookService.processNombaEvent(parsed.data);
 
     this.logger.debug(
-      '[Nomba Webhook] Event processing complete. Result status: ' + result.status,
+      '[Nomba Webhook] Event processing complete. Result status: ' +
+        result.status,
     );
 
     return result;

@@ -13,7 +13,8 @@ export class AppController {
   @Get()
   @ApiOperation({
     summary: 'Health check',
-    description: 'Returns server status. Use this to verify the API is running and accessible.',
+    description:
+      'Returns server status. Use this to verify the API is running and accessible.',
   })
   @ApiResponse({
     status: 200,
@@ -32,7 +33,8 @@ export class AppController {
   @Get('api/v1/health')
   @ApiOperation({
     summary: 'API health check',
-    description: 'Returns API status. Use this to verify the API service is running.',
+    description:
+      'Returns API status. Use this to verify the API service is running.',
   })
   @ApiResponse({
     status: 200,
@@ -56,7 +58,8 @@ export class AppController {
   @UseGuards(ApiKeyGuard)
   @ApiOperation({
     summary: 'Test API key validity',
-    description: 'Verifies that the provided API key in the Authorization header is valid and authorized. Use this to test your API key configuration.',
+    description:
+      'Verifies that the provided API key in the Authorization header is valid and authorized. Use this to test your API key configuration.',
   })
   @ApiResponse({
     status: 200,

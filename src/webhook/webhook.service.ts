@@ -215,7 +215,10 @@ export class WebhookService {
       .where(eq(subscriptions.id, subscriptionId));
   }
 
-  private renderPaymentFailedEmail(email: string, failureReason: string): string {
+  private renderPaymentFailedEmail(
+    email: string,
+    failureReason: string,
+  ): string {
     const htmlContent = `
       <h2 class="title" style="color: #DC2626;">Payment Failed</h2>
       <p class="paragraph">

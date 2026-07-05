@@ -73,7 +73,8 @@ export class CheckoutController {
         sessionId: {
           type: 'string',
           example: 'tx_1234567890abcdef',
-          description: 'Unique transaction/session ID for tracking and polling status',
+          description:
+            'Unique transaction/session ID for tracking and polling status',
         },
         checkoutUrl: {
           type: 'string',
@@ -251,7 +252,8 @@ export class CheckoutController {
           type: 'string',
           nullable: true,
           example: 'ref_nomba_992c',
-          description: 'Reference from payment processor (null until payment is processed)',
+          description:
+            'Reference from payment processor (null until payment is processed)',
         },
         createdAt: {
           type: 'string',
@@ -280,7 +282,8 @@ export class CheckoutController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Create a public plan checkout session',
-    description: 'Enables checking out plans directly from a public URL link without credentials.',
+    description:
+      'Enables checking out plans directly from a public URL link without credentials.',
   })
   async createPublicPlanSession(
     @Param('planId') planId: string,
@@ -293,7 +296,8 @@ export class CheckoutController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Request to self-unsubscribe from a subscription (public)',
-    description: 'Generates and sends a 6-digit OTP code to the subscription owner email to verify unsubscribe request.',
+    description:
+      'Generates and sends a 6-digit OTP code to the subscription owner email to verify unsubscribe request.',
   })
   async requestUnsubscribe(
     @Param('id') id: string,
@@ -306,7 +310,8 @@ export class CheckoutController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Confirm self-unsubscribe with OTP (public)',
-    description: 'Confirms subscription cancellation using the 6-digit verification code.',
+    description:
+      'Confirms subscription cancellation using the 6-digit verification code.',
   })
   async confirmUnsubscribe(
     @Param('id') id: string,
@@ -335,7 +340,8 @@ export class CheckoutController {
           type: 'string',
           format: 'email',
           example: 'customer@example.com',
-          description: 'Email address associated with the subscription (for verification)',
+          description:
+            'Email address associated with the subscription (for verification)',
         },
       },
     },

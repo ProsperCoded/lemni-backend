@@ -19,6 +19,7 @@ export const NombaWebhookEventSchema = z.object({
       .object({
         tokenKey: z.string(),
       })
+      .nullable()
       .optional(),
   }),
 });

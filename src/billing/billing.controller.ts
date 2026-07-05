@@ -38,8 +38,16 @@ import type {
   RegisterCustomerDto,
   TransactionFilterDto,
 } from './dto/billing.dto';
-import { PublicPlanSessionSchema, UnsubscribeRequestSchema, UnsubscribeConfirmSchema } from '../checkout/dto/checkout.dto';
-import type { PublicPlanSessionDto, UnsubscribeRequestDto, UnsubscribeConfirmDto } from '../checkout/dto/checkout.dto';
+import {
+  PublicPlanSessionSchema,
+  UnsubscribeRequestSchema,
+  UnsubscribeConfirmSchema,
+} from '../checkout/dto/checkout.dto';
+import type {
+  PublicPlanSessionDto,
+  UnsubscribeRequestDto,
+  UnsubscribeConfirmDto,
+} from '../checkout/dto/checkout.dto';
 
 @ApiTags('merchant-dashboard/billing')
 @ApiBearerAuth()
@@ -251,7 +259,8 @@ export class BillingController {
       properties: {
         error: {
           type: 'string',
-          example: 'Subscription is not in canceled status or payment method is missing',
+          example:
+            'Subscription is not in canceled status or payment method is missing',
         },
       },
     },
@@ -552,7 +561,8 @@ export class BillingController {
   })
   @ApiOperation({
     summary: 'Confirm unsubscribe with OTP (public)',
-    description: 'Verifies the OTP code sent to the subscription owner email and cancels the subscription immediately.',
+    description:
+      'Verifies the OTP code sent to the subscription owner email and cancels the subscription immediately.',
   })
   @ApiBody({
     schema: {
@@ -624,7 +634,8 @@ export class BillingController {
   @Get('plans')
   @ApiOperation({
     summary: 'List all plans for authenticated merchant',
-    description: 'Returns an array of all plans belonging to the authenticated merchant.',
+    description:
+      'Returns an array of all plans belonging to the authenticated merchant.',
   })
   @ApiResponse({
     status: 200,
@@ -659,7 +670,8 @@ export class BillingController {
   @UsePipes(new ZodValidationPipe(CreatePlanSchema))
   @ApiOperation({
     summary: 'Update a billing plan',
-    description: 'Updates an existing subscription plan with new configuration.',
+    description:
+      'Updates an existing subscription plan with new configuration.',
   })
   @ApiBody({
     schema: {

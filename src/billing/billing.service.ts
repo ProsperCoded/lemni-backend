@@ -339,10 +339,7 @@ export class BillingService {
    * Create a public checkout session for a plan.
    * Called when customer submits email on the public checkout page.
    */
-  async createPublicCheckout(
-    planId: string,
-    data: PublicPlanSessionDto,
-  ) {
+  async createPublicCheckout(planId: string, data: PublicPlanSessionDto) {
     return this.checkoutService.createPublicPlanSession(planId, data);
   }
 
@@ -364,10 +361,7 @@ export class BillingService {
    * Lists all plans for a merchant.
    */
   async listPlans(merchantId: string) {
-    return this.db
-      .select()
-      .from(plans)
-      .where(eq(plans.merchantId, merchantId));
+    return this.db.select().from(plans).where(eq(plans.merchantId, merchantId));
   }
 
   /**
@@ -415,7 +409,10 @@ export class BillingService {
       .from(subscriptions)
       .where(
         and(
-          eq(subscriptions.customerId, sql`(SELECT id FROM customers WHERE merchant_id = ${merchantId})`),
+          eq(
+            subscriptions.customerId,
+            sql`(SELECT id FROM customers WHERE merchant_id = ${merchantId})`,
+          ),
           sql`${subscriptions.status} IN ('active', 'trialing')`,
         ),
       );

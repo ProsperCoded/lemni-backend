@@ -47,7 +47,8 @@ export class NotificationController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Disconnect Telegram (merchant dashboard)',
-    description: 'Clears the Telegram chat ID for the authenticated merchant. After disconnection, the merchant will no longer receive Telegram notifications.',
+    description:
+      'Clears the Telegram chat ID for the authenticated merchant. After disconnection, the merchant will no longer receive Telegram notifications.',
   })
   @ApiResponse({
     status: 200,
@@ -96,7 +97,8 @@ export class NotificationController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Check Telegram connection status',
-    description: 'Returns whether Telegram is connected for the merchant and the connection timestamp. The chat ID is partially masked for security.',
+    description:
+      'Returns whether Telegram is connected for the merchant and the connection timestamp. The chat ID is partially masked for security.',
   })
   @ApiResponse({
     status: 200,
@@ -112,13 +114,15 @@ export class NotificationController {
         connectedAt: {
           type: 'string',
           nullable: true,
-          description: 'Timestamp when Telegram was connected (ISO 8601 format)',
+          description:
+            'Timestamp when Telegram was connected (ISO 8601 format)',
           example: '2026-07-04T10:00:00.000Z',
         },
         chatId: {
           type: 'string',
           nullable: true,
-          description: 'Partially masked Telegram chat ID (first 4 and last 4 characters visible)',
+          description:
+            'Partially masked Telegram chat ID (first 4 and last 4 characters visible)',
           example: '1234...5678',
         },
       },
