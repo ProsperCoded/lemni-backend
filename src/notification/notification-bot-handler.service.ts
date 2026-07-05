@@ -64,6 +64,20 @@ export class NotificationBotHandlerService {
         return;
       }
 
+      if (merchant.telegramChatId === chatId) {
+        try {
+          await this.telegramClient.sendMessage(
+            chatId,
+            'ℹ️ <b>Already Connected!</b>\n\nYour Lemni account is already connected to this chat. You will continue to receive payment notifications here.',
+          );
+        } catch (error) {
+          this.logger.warn(
+            `[BotHandler] Failed to send already-connected message: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+        return;
+      }
+
       if (merchant.telegramChatId && merchant.telegramChatId !== chatId) {
         try {
           await this.telegramClient.sendMessage(
