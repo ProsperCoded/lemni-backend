@@ -11,6 +11,7 @@ import { CheckoutModule } from './checkout/checkout.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { WebhookModule } from './webhook/webhook.module';
 import { NotificationModule } from './notification/notification.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { NotificationModule } from './notification/notification.module';
     SchedulerModule,
     WebhookModule,
     NotificationModule,
+    AuditModule,
   ],
   controllers: [AppController],
   providers: [AppService],

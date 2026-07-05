@@ -16,7 +16,9 @@ import {
   plans,
   dlqJobs,
   merchants,
+  auditEvents,
 } from '../database/schema';
+import * as crypto from 'crypto';
 import { NombaClient } from '../provider/nomba.client';
 import { CircuitBreakerService } from '../provider/circuit-breaker.service';
 import { computeNextPeriodEnd } from '../billing/billing-period.util';
@@ -347,6 +349,18 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
       .update(subscriptions)
       .set({ status: 'past_due' })
       .where(eq(subscriptions.id, payload.subscriptionId));
+
+    await this.logAuditEvent({
+      merchantId: payload.merchantId,
+      customerId: payload.customerId,
+      subscriptionId: payload.subscriptionId,
+      action: 'subscription_past_due',
+      details: `Charge failed. Reason: ${reason}. ${
+        plan && plan.gracePeriodDays > 0
+          ? `Entered ${plan.gracePeriodDays}-day grace period.`
+          : 'No grace period configured.'
+      }`,
+    });
   }
 
   private async handleGracePeriodExhausted(
@@ -370,6 +384,14 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
       customerId: payload.customerId,
       reason,
       timestamp: new Date().toISOString(),
+    });
+
+    await this.logAuditEvent({
+      merchantId: payload.merchantId,
+      customerId: payload.customerId,
+      subscriptionId: payload.subscriptionId,
+      action: 'subscription_canceled',
+      details: `Grace period exhausted after ${payload.retryCount} retries — subscription automatically canceled. Reason: ${reason}`,
     });
 
     await this.sendToDlq(payload, reason);
@@ -454,5 +476,33 @@ export class DunningWorkerService implements OnModuleInit, OnModuleDestroy {
       );
     }
     return false;
+  }
+
+  /**
+   * Writes a row to the audit trail. Best-effort — audit logging failures
+   * must never block dunning/billing processing.
+   */
+  private async logAuditEvent(event: {
+    merchantId: string;
+    customerId?: string;
+    subscriptionId?: string;
+    action: string;
+    details?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    try {
+      await this.db.insert(auditEvents).values({
+        id: `audit_${crypto.randomBytes(8).toString('hex')}`,
+        merchantId: event.merchantId,
+        customerId: event.customerId,
+        subscriptionId: event.subscriptionId,
+        action: event.action,
+        details: event.details,
+        metadata: event.metadata ? JSON.stringify(event.metadata) : undefined,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`[Audit] Failed to log event ${event.action}: ${msg}`);
+    }
   }
 }

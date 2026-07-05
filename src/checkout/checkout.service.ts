@@ -17,6 +17,7 @@ import {
   transactions,
   merchants,
   otpVerifications,
+  auditEvents,
 } from '../database/schema';
 import { eq, and, gte } from 'drizzle-orm';
 import * as crypto from 'crypto';
@@ -35,8 +36,15 @@ export class CheckoutService {
 
   /**
    * Helper to get or create a customer dynamically by email under a merchant.
+   * signupIp/signupUserAgent are only captured for browser-originated (public
+   * plan link) signups — developer API-key flows would only record the
+   * developer's server, not the real end customer.
    */
-  private async getOrCreateCustomer(merchantId: string, email: string) {
+  private async getOrCreateCustomer(
+    merchantId: string,
+    email: string,
+    signup?: { ip?: string; userAgent?: string },
+  ) {
     const [existing] = await this.db
       .select()
       .from(customers)
@@ -55,10 +63,40 @@ export class CheckoutService {
         id: customerId,
         merchantId,
         email,
+        signupIp: signup?.ip,
+        signupUserAgent: signup?.userAgent,
       })
       .returning();
 
     return newCustomer;
+  }
+
+  /**
+   * Writes a row to the audit trail. Best-effort — audit logging failures
+   * must never block the actual billing operation.
+   */
+  private async logAuditEvent(event: {
+    merchantId: string;
+    customerId?: string;
+    subscriptionId?: string;
+    action: string;
+    details?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    try {
+      await this.db.insert(auditEvents).values({
+        id: `audit_${crypto.randomBytes(8).toString('hex')}`,
+        merchantId: event.merchantId,
+        customerId: event.customerId,
+        subscriptionId: event.subscriptionId,
+        action: event.action,
+        details: event.details,
+        metadata: event.metadata ? JSON.stringify(event.metadata) : undefined,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`[Audit] Failed to log event ${event.action}: ${msg}`);
+    }
   }
 
   /**
@@ -151,6 +189,7 @@ export class CheckoutService {
     merchantId: string,
     environment: 'test' | 'live',
     data: { planId: string; email: string; callbackUrl?: string },
+    signup?: { ip?: string; userAgent?: string },
   ) {
     const [plan] = await this.db
       .select()
@@ -161,7 +200,23 @@ export class CheckoutService {
       throw new NotFoundException('Pricing plan not found');
     }
 
-    const customer = await this.getOrCreateCustomer(merchantId, data.email);
+    const isNewCustomerEmail = !(
+      await this.db
+        .select()
+        .from(customers)
+        .where(
+          and(
+            eq(customers.email, data.email),
+            eq(customers.merchantId, merchantId),
+          ),
+        )
+    )[0];
+
+    const customer = await this.getOrCreateCustomer(
+      merchantId,
+      data.email,
+      signup,
+    );
     const callbackUrl = await this.resolveCallbackUrl(
       merchantId,
       data.callbackUrl,
@@ -195,6 +250,27 @@ export class CheckoutService {
       subscriptionId,
       amount: plan.amount,
       status: 'pending',
+    });
+
+    if (isNewCustomerEmail) {
+      await this.logAuditEvent({
+        merchantId,
+        customerId: customer.id,
+        subscriptionId,
+        action: 'customer_registered',
+        details: `Customer registered via checkout for plan "${plan.name}"`,
+      });
+    }
+
+    await this.logAuditEvent({
+      merchantId,
+      customerId: customer.id,
+      subscriptionId,
+      action: plan.trialDays > 0 ? 'trial_started' : 'subscription_created',
+      details:
+        plan.trialDays > 0
+          ? `Started ${plan.trialDays}-day trial for plan "${plan.name}"`
+          : `Subscription created for plan "${plan.name}" (₦${plan.amount})`,
     });
 
     // Recurring subscriptions must be charged automatically on renewal,
@@ -271,6 +347,7 @@ export class CheckoutService {
   async createPublicPlanSession(
     planId: string,
     data: { email: string; callbackUrl?: string },
+    signup?: { ip?: string; userAgent?: string },
   ) {
     const [plan] = await this.db
       .select()
@@ -281,11 +358,16 @@ export class CheckoutService {
       throw new NotFoundException('Pricing plan not found');
     }
 
-    return this.createSubscriptionPayment(plan.merchantId, 'live', {
-      planId,
-      email: data.email,
-      callbackUrl: data.callbackUrl,
-    });
+    return this.createSubscriptionPayment(
+      plan.merchantId,
+      'live',
+      {
+        planId,
+        email: data.email,
+        callbackUrl: data.callbackUrl,
+      },
+      signup,
+    );
   }
 
   /**
@@ -382,6 +464,21 @@ export class CheckoutService {
     await this.db
       .delete(otpVerifications)
       .where(eq(otpVerifications.id, otpRecord.id));
+
+    const [plan] = await this.db
+      .select()
+      .from(plans)
+      .where(eq(plans.id, sub.planId));
+
+    if (plan) {
+      await this.logAuditEvent({
+        merchantId: plan.merchantId,
+        customerId: sub.customerId,
+        subscriptionId,
+        action: 'subscription_canceled',
+        details: 'Customer self-canceled subscription via self-service page',
+      });
+    }
 
     return {
       success: true,

@@ -10,9 +10,56 @@ import { ConfigService } from '@nestjs/config';
 import { eq } from 'drizzle-orm';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
 import type { DrizzleDB } from '../database/database.provider';
-import { merchants } from '../database/schema';
+import { merchants, notificationLogs } from '../database/schema';
+import * as crypto from 'crypto';
 import { NotificationService } from './notification.service';
 import type { NotificationJobPayload } from './dto/notification.dto';
+
+const EVENT_META: Record<
+  NotificationJobPayload['eventType'],
+  {
+    category: 'payment' | 'system' | 'subscription';
+    severity: 'success' | 'warning' | 'info';
+    describe: (p: NotificationJobPayload) => string;
+  }
+> = {
+  payment_success: {
+    category: 'payment',
+    severity: 'success',
+    describe: (p) =>
+      `Successful collection of ₦${(p.amount ?? 0).toLocaleString()} for subscription ${p.subscriptionId ?? 'n/a'}.`,
+  },
+  payment_failed: {
+    category: 'payment',
+    severity: 'warning',
+    describe: (p) =>
+      `Payment attempt failed for subscription ${p.subscriptionId ?? 'n/a'}: ${p.reason ?? 'Unknown reason'}.`,
+  },
+  trial_ended: {
+    category: 'subscription',
+    severity: 'info',
+    describe: (p) =>
+      `Trial period ended for subscription ${p.subscriptionId ?? 'n/a'}. Billing has started.`,
+  },
+  grace_period_exhausted: {
+    category: 'subscription',
+    severity: 'warning',
+    describe: (p) =>
+      `Grace period exhausted for subscription ${p.subscriptionId ?? 'n/a'} after repeated failed retries. Access locked.`,
+  },
+  subscription_canceled: {
+    category: 'subscription',
+    severity: 'info',
+    describe: (p) =>
+      `Subscription ${p.subscriptionId ?? 'n/a'} canceled. Reason: ${p.reason ?? 'Merchant/customer initiated'}.`,
+  },
+  dunning_failed: {
+    category: 'payment',
+    severity: 'warning',
+    describe: (p) =>
+      `Dunning retry failed for subscription ${p.subscriptionId ?? 'n/a'}: ${p.reason ?? 'Max retries exhausted'}.`,
+  },
+};
 
 @Injectable()
 export class NotificationWorkerService
@@ -62,20 +109,30 @@ export class NotificationWorkerService
       .from(merchants)
       .where(eq(merchants.id, payload.merchantId));
 
-    if (!merchant || !merchant.telegramChatId) {
+    let delivered = false;
+    let deliveryError: Error | null = null;
+
+    if (merchant?.telegramChatId) {
+      try {
+        await this.notificationService.sendAlert(
+          merchant.telegramChatId,
+          payload,
+        );
+        delivered = true;
+      } catch (error: unknown) {
+        deliveryError =
+          error instanceof Error ? error : new Error(String(error));
+      }
+    } else {
       this.logger.log(
-        `[NotificationWorker] No Telegram chat_id for merchant ${payload.merchantId} — skipping`,
+        `[NotificationWorker] No Telegram chat_id for merchant ${payload.merchantId} — logging only`,
       );
-      return;
     }
 
-    try {
-      await this.notificationService.sendAlert(
-        merchant.telegramChatId,
-        payload,
-      );
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error);
+    await this.persistNotificationLog(payload, delivered);
+
+    if (deliveryError) {
+      const msg = deliveryError.message;
 
       if (msg.includes('4xx')) {
         this.logger.warn(
@@ -85,7 +142,36 @@ export class NotificationWorkerService
       }
 
       this.logger.error(`[NotificationWorker] 5xx or transient error: ${msg}`);
-      throw error;
+      throw deliveryError;
+    }
+  }
+
+  /**
+   * Persists every notification event to notification_logs regardless of
+   * Telegram delivery outcome, so the merchant dashboard has a real history
+   * even for merchants who haven't connected Telegram.
+   */
+  private async persistNotificationLog(
+    payload: NotificationJobPayload,
+    delivered: boolean,
+  ): Promise<void> {
+    const meta = EVENT_META[payload.eventType];
+    try {
+      await this.db.insert(notificationLogs).values({
+        id: `notif_${crypto.randomBytes(8).toString('hex')}`,
+        merchantId: payload.merchantId,
+        eventType: payload.eventType,
+        category: meta.category,
+        severity: meta.severity,
+        message: meta.describe(payload),
+        subscriptionId: payload.subscriptionId,
+        delivered,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `[NotificationWorker] Failed to persist notification log: ${msg}`,
+      );
     }
   }
 }

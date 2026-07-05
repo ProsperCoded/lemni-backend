@@ -18,6 +18,7 @@ import {
   ApiParam,
   ApiBody,
 } from '@nestjs/swagger';
+import type { Request as ExpressRequest } from 'express';
 import { ApiKeyGuard } from '../auth/guards/api-key.guard';
 import type { AuthenticatedRequest } from '../auth/guards/api-key.guard';
 import { CheckoutService } from './checkout.service';
@@ -288,8 +289,12 @@ export class CheckoutController {
   async createPublicPlanSession(
     @Param('planId') planId: string,
     @Body() body: { email: string; callbackUrl?: string },
+    @Request() req: ExpressRequest,
   ) {
-    return this.checkoutService.createPublicPlanSession(planId, body);
+    return this.checkoutService.createPublicPlanSession(planId, body, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
   }
 
   @Post('public/subscriptions/:id/unsubscribe/request')

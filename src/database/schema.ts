@@ -32,6 +32,8 @@ export const customers = sqliteTable('customers', {
   email: text('email').notNull(),
   nombaToken: text('nomba_token'),
   metadata: text('metadata'), // JSON stringified
+  signupIp: text('signup_ip'),
+  signupUserAgent: text('signup_user_agent'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -112,5 +114,43 @@ export const otpVerifications = sqliteTable('otp_verifications', {
   }),
   code: text('code').notNull(),
   expiresAt: text('expires_at').notNull(), // ISO String
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const auditEvents = sqliteTable('audit_events', {
+  id: text('id').primaryKey(),
+  merchantId: text('merchant_id')
+    .notNull()
+    .references(() => merchants.id, { onDelete: 'cascade' }),
+  customerId: text('customer_id').references(() => customers.id, {
+    onDelete: 'cascade',
+  }),
+  subscriptionId: text('subscription_id').references(() => subscriptions.id, {
+    onDelete: 'set null',
+  }),
+  action: text('action').notNull(), // e.g. 'subscription_activated', 'payment_failed', 'subscription_canceled'
+  details: text('details'), // human-readable summary
+  metadata: text('metadata'), // JSON stringified extra context (e.g. gateway response code)
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const notificationLogs = sqliteTable('notification_logs', {
+  id: text('id').primaryKey(),
+  merchantId: text('merchant_id')
+    .notNull()
+    .references(() => merchants.id, { onDelete: 'cascade' }),
+  eventType: text('event_type').notNull(),
+  category: text('category', {
+    enum: ['payment', 'system', 'subscription'],
+  }).notNull(),
+  severity: text('severity', {
+    enum: ['success', 'warning', 'info'],
+  }).notNull(),
+  message: text('message').notNull(),
+  subscriptionId: text('subscription_id').references(() => subscriptions.id, {
+    onDelete: 'set null',
+  }),
+  delivered: integer('delivered', { mode: 'boolean' }).notNull().default(false),
+  read: integer('read', { mode: 'boolean' }).notNull().default(false),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });

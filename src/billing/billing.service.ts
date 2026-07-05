@@ -426,9 +426,9 @@ export class BillingService {
       .select({
         total: sql<number>`COALESCE(SUM(
           CASE
-            WHEN p.interval = 'weekly' THEN p.amount * 4.33
-            WHEN p.interval = 'yearly' THEN p.amount / 12
-            ELSE p.amount
+            WHEN ${plans.interval} = 'weekly' THEN ${plans.amount} * 4.33
+            WHEN ${plans.interval} = 'yearly' THEN ${plans.amount} / 12
+            ELSE ${plans.amount}
           END
         ), 0)`,
       })

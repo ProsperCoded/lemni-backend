@@ -8,7 +8,9 @@ import {
   subscriptions,
   plans,
   customers,
+  auditEvents,
 } from '../database/schema';
+import * as crypto from 'crypto';
 import { computeNextPeriodEnd } from '../billing/billing-period.util';
 import { EmailService } from '../common/services/email.service';
 import type { NombaWebhookEventDto } from './dto/webhook.dto';
@@ -17,6 +19,34 @@ import type { NotificationJobPayload } from '../notification/dto/notification.dt
 @Injectable()
 export class WebhookService {
   private readonly logger = new Logger(WebhookService.name);
+
+  /**
+   * Writes a row to the audit trail. Best-effort — audit logging failures
+   * must never block webhook processing.
+   */
+  private async logAuditEvent(event: {
+    merchantId: string;
+    customerId?: string;
+    subscriptionId?: string;
+    action: string;
+    details?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    try {
+      await this.db.insert(auditEvents).values({
+        id: `audit_${crypto.randomBytes(8).toString('hex')}`,
+        merchantId: event.merchantId,
+        customerId: event.customerId,
+        subscriptionId: event.subscriptionId,
+        action: event.action,
+        details: event.details,
+        metadata: event.metadata ? JSON.stringify(event.metadata) : undefined,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`[Audit] Failed to log event ${event.action}: ${msg}`);
+    }
+  }
 
   constructor(
     @Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB,
@@ -96,6 +126,7 @@ export class WebhookService {
           const plan = await this.db.query.plans.findFirst({
             where: eq(plans.id, sub.planId),
           });
+          const wasRestoredFromPastDue = sub.status === 'past_due';
 
           await this.advanceSubscription(tx.subscriptionId);
 
@@ -116,6 +147,29 @@ export class WebhookService {
               amount: tx.amount || 0,
               timestamp: new Date().toISOString(),
             });
+
+            await this.logAuditEvent({
+              merchantId: plan.merchantId,
+              customerId: sub.customerId,
+              subscriptionId: tx.subscriptionId,
+              action: wasRestoredFromPastDue
+                ? 'subscription_restored'
+                : 'payment_succeeded',
+              details: wasRestoredFromPastDue
+                ? `Subscription restored to active after successful retry — ₦${tx.amount}`
+                : `Successful collection of ₦${tx.amount} for plan "${plan.name}"`,
+              metadata: { nombaRef, transactionId: tx.id },
+            });
+
+            if (tokenKey) {
+              await this.logAuditEvent({
+                merchantId: plan.merchantId,
+                customerId: sub.customerId,
+                subscriptionId: tx.subscriptionId,
+                action: 'card_tokenized',
+                details: 'Customer card authorization tokenized via Nomba',
+              });
+            }
           }
         }
       }
@@ -146,7 +200,8 @@ export class WebhookService {
         where: eq(customers.id, tx.customerId),
       });
 
-      let plan: any = null;
+      let plan: Awaited<ReturnType<typeof this.db.query.plans.findFirst>> =
+        undefined;
 
       if (tx.subscriptionId) {
         const sub = await this.db.query.subscriptions.findFirst({
@@ -166,6 +221,21 @@ export class WebhookService {
             reason: failureReason,
             timestamp: new Date().toISOString(),
           });
+
+          if (plan) {
+            await this.logAuditEvent({
+              merchantId: plan.merchantId,
+              customerId: sub.customerId,
+              subscriptionId: tx.subscriptionId,
+              action: 'payment_failed',
+              details: `Payment attempt failed for plan "${plan.name}": ${failureReason}`,
+              metadata: {
+                nombaRef,
+                transactionId: tx.id,
+                responseCode: event.data.transaction.responseCode,
+              },
+            });
+          }
         }
       }
 

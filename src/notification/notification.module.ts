@@ -5,17 +5,20 @@ import { NotificationService } from './notification.service';
 import { NotificationWorkerService } from './notification-worker.service';
 import { NotificationBotHandlerService } from './notification-bot-handler.service';
 import { NotificationController } from './notification.controller';
+import { NotificationLogController } from './notification-log.controller';
+import { NotificationLogService } from './notification-log.service';
 import { TelegramClient } from './telegram-client';
 import type { NotificationJobPayload } from './dto/notification.dto';
 
 @Global()
 @Module({
-  controllers: [NotificationController],
+  controllers: [NotificationController, NotificationLogController],
   providers: [
     TelegramClient,
     NotificationService,
     NotificationBotHandlerService,
     NotificationWorkerService,
+    NotificationLogService,
     {
       provide: 'NOTIFICATION_QUEUE',
       useFactory: (configService: ConfigService) => {
@@ -31,6 +34,7 @@ import type { NotificationJobPayload } from './dto/notification.dto';
     'NOTIFICATION_QUEUE',
     NotificationService,
     NotificationBotHandlerService,
+    NotificationLogService,
   ],
 })
 export class NotificationModule implements OnModuleDestroy {
