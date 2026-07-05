@@ -30,6 +30,13 @@ export class WebhookService {
   ): Promise<{ status: string }> {
     const nombaRef = event.data.transaction.transactionId;
 
+    this.logger.debug(
+      '[Nomba Webhook] Processing event - event_type: ' +
+        event.event_type +
+        ', nombaRef/transactionId: ' +
+        nombaRef,
+    );
+
     const [tx] = await this.db
       .select()
       .from(transactions)
@@ -38,10 +45,21 @@ export class WebhookService {
     if (!tx) {
       this.logger.warn(
         '[Webhook] orphaned_webhook — no matching transaction for nombaRef: ' +
-          nombaRef,
+          nombaRef +
+          '. Event payload: ' +
+          JSON.stringify(event),
       );
       return { status: 'orphaned' };
     }
+
+    this.logger.debug(
+      '[Nomba Webhook] Found matching transaction. tx.id: ' +
+        tx.id +
+        ', tx.nombaRef: ' +
+        tx.nombaRef +
+        ', tx.status: ' +
+        tx.status,
+    );
 
     if (tx.status === 'success' || tx.status === 'failed') {
       this.logger.log(
@@ -55,6 +73,15 @@ export class WebhookService {
     }
 
     if (event.event_type === 'payment_success') {
+      this.logger.log(
+        '[Nomba Webhook] Payment success for transactionId: ' +
+          nombaRef +
+          '. Merchant: ' +
+          event.data.merchant.userId +
+          ', Wallet: ' +
+          event.data.merchant.walletId,
+      );
+
       await this.db
         .update(transactions)
         .set({ status: 'success', response: JSON.stringify(event) })
@@ -96,6 +123,20 @@ export class WebhookService {
     }
 
     if (event.event_type === 'payment_failed') {
+      const failureReason =
+        event.data.transaction.responseCodeMessage ||
+        event.data.transaction.responseCode ||
+        'Payment failed — please retry';
+
+      this.logger.log(
+        '[Nomba Webhook] Payment failed for transactionId: ' +
+          nombaRef +
+          '. Reason: ' +
+          failureReason +
+          ', Response code: ' +
+          event.data.transaction.responseCode,
+      );
+
       await this.db
         .update(transactions)
         .set({ status: 'failed', response: JSON.stringify(event) })
@@ -104,11 +145,6 @@ export class WebhookService {
       const customer = await this.db.query.customers.findFirst({
         where: eq(customers.id, tx.customerId),
       });
-
-      const failureReason =
-        event.data.transaction.responseCodeMessage ||
-        event.data.transaction.responseCode ||
-        'Payment failed — please retry';
 
       let plan: any = null;
 

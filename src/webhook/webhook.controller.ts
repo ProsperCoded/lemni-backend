@@ -54,13 +54,23 @@ export class WebhookController {
     @Headers('nomba-timestamp') timestamp: string | undefined,
     @Ip() ip: string,
   ) {
+    this.logger.debug('[Nomba Webhook] Raw body received: ' + JSON.stringify(body));
+
     const parsed = NombaWebhookEventSchema.safeParse(body);
     if (!parsed.success) {
       this.logger.warn(
         '[Webhook] Payload failed schema validation — IP: ' + ip,
+        parsed.error,
       );
       return { received: true };
     }
+
+    this.logger.debug(
+      '[Nomba Webhook] Parsed successfully. Event type: ' +
+        parsed.data.event_type +
+        ', Transaction ID: ' +
+        parsed.data.data.transaction.transactionId,
+    );
 
     const secret = this.configService.get<string>('NOMBA_WEBHOOK_SECRET')!;
     const isValid = verifyNombaSignature(
@@ -75,7 +85,18 @@ export class WebhookController {
       throw new UnauthorizedException('Invalid webhook signature');
     }
 
-    return this.webhookService.processNombaEvent(parsed.data);
+    this.logger.debug(
+      '[Nomba Webhook] Signature verified. Processing event for transactionId: ' +
+        parsed.data.data.transaction.transactionId,
+    );
+
+    const result = await this.webhookService.processNombaEvent(parsed.data);
+
+    this.logger.debug(
+      '[Nomba Webhook] Event processing complete. Result status: ' + result.status,
+    );
+
+    return result;
   }
 
   @Post('telegram')
