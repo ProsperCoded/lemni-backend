@@ -322,12 +322,13 @@ export class BillingService {
       throw new NotFoundException('Plan not found');
     }
 
-    const dashboardUrl = this.configService.get<string>(
-      'DASHBOARD_URL',
-      'http://localhost:5173',
-    );
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
 
-    const checkoutUrl = `${dashboardUrl}/checkout/${planId}`;
+    if (!frontendUrl) {
+      throw new Error('FRONTEND_URL is not configured');
+    }
+
+    const checkoutUrl = `${frontendUrl}/checkout/${planId}`;
 
     return {
       checkoutUrl,
