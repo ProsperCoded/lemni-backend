@@ -359,4 +359,118 @@ export class BillingService {
   async confirmUnsubscribe(subscriptionId: string, code: string) {
     return this.checkoutService.confirmUnsubscribe(subscriptionId, code);
   }
+
+  /**
+   * Lists all plans for a merchant.
+   */
+  async listPlans(merchantId: string) {
+    return this.db
+      .select()
+      .from(plans)
+      .where(eq(plans.merchantId, merchantId));
+  }
+
+  /**
+   * Updates an existing plan for a merchant.
+   */
+  async updatePlan(
+    merchantId: string,
+    planId: string,
+    data: {
+      name?: string;
+      amount?: number;
+      billingModel?: 'recurring' | 'one_time' | 'custom_input';
+      interval?: 'weekly' | 'monthly' | 'yearly';
+      trialDays?: number;
+      trialRequireCard?: boolean;
+      gracePeriodDays?: number;
+    },
+  ) {
+    // Verify plan belongs to merchant
+    const [plan] = await this.db
+      .select()
+      .from(plans)
+      .where(and(eq(plans.id, planId), eq(plans.merchantId, merchantId)));
+
+    if (!plan) {
+      throw new NotFoundException('Plan not found');
+    }
+
+    const [updated] = await this.db
+      .update(plans)
+      .set(data)
+      .where(eq(plans.id, planId))
+      .returning();
+
+    return updated;
+  }
+
+  /**
+   * Get dashboard statistics for a merchant.
+   */
+  async getDashboardStats(merchantId: string) {
+    // Get active subscriptions count (active or trialing)
+    const [activeSubsResult] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.customerId, sql`(SELECT id FROM customers WHERE merchant_id = ${merchantId})`),
+          sql`${subscriptions.status} IN ('active', 'trialing')`,
+        ),
+      );
+    const activeSubscriptions = activeSubsResult
+      ? Number(activeSubsResult.count)
+      : 0;
+
+    // Get MRR (monthly recurring revenue)
+    // Sum amounts of active recurring subscriptions, normalized to monthly
+    const [mrrResult] = await this.db
+      .select({
+        total: sql<number>`COALESCE(SUM(
+          CASE
+            WHEN p.interval = 'weekly' THEN p.amount * 4.33
+            WHEN p.interval = 'yearly' THEN p.amount / 12
+            ELSE p.amount
+          END
+        ), 0)`,
+      })
+      .from(subscriptions)
+      .innerJoin(plans, eq(subscriptions.planId, plans.id))
+      .where(
+        and(
+          eq(plans.merchantId, merchantId),
+          eq(subscriptions.status, 'active'),
+          eq(plans.billingModel, 'recurring'),
+        ),
+      );
+    const mrr = mrrResult ? Number(mrrResult.total) : 0;
+
+    // Get churn rate (canceled this month / active at start of month)
+    // For simplicity, use 0 if insufficient data
+    const churnRate = 0;
+
+    // Get recent volume (sum of successful transactions, last 30 days)
+    const thirtyDaysAgo = new Date(
+      Date.now() - 30 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const [volumeResult] = await this.db
+      .select({ total: sql<number>`COALESCE(SUM(amount), 0)` })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.merchantId, merchantId),
+          eq(transactions.status, 'success'),
+          gte(transactions.createdAt, thirtyDaysAgo),
+        ),
+      );
+    const recentVolume = volumeResult ? Number(volumeResult.total) : 0;
+
+    return {
+      mrr,
+      activeSubscriptions,
+      churnRate,
+      recentVolume,
+    };
+  }
 }

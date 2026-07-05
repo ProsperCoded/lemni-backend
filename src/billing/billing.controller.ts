@@ -11,6 +11,7 @@ import {
   UsePipes,
   Get,
   Query,
+  Put,
 } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
 import type { Request as ExpressRequest } from 'express';
@@ -618,5 +619,123 @@ export class BillingController {
     @Body() body: UnsubscribeConfirmDto,
   ) {
     return this.billingService.confirmUnsubscribe(id, body.code);
+  }
+
+  @Get('plans')
+  @ApiOperation({
+    summary: 'List all plans for authenticated merchant',
+    description: 'Returns an array of all plans belonging to the authenticated merchant.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Plans retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', example: 'plan_7a8dca9' },
+          merchantId: { type: 'string', example: 'merchant-test-123' },
+          name: { type: 'string', example: 'Standard Plan' },
+          amount: { type: 'number', format: 'float', example: 29.99 },
+          billingModel: { type: 'string', example: 'recurring' },
+          interval: { type: 'string', example: 'monthly' },
+          trialDays: { type: 'integer', example: 0 },
+          trialRequireCard: { type: 'boolean', example: false },
+          gracePeriodDays: { type: 'integer', example: 3 },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized JWT session token' })
+  async listPlans(@Request() req: ExpressRequest) {
+    const merchantId = (req.user as Record<string, unknown>)
+      .merchantId as string;
+    return this.billingService.listPlans(merchantId);
+  }
+
+  @Put('plans/:id')
+  @UsePipes(new ZodValidationPipe(CreatePlanSchema))
+  @ApiOperation({
+    summary: 'Update a billing plan',
+    description: 'Updates an existing subscription plan with new configuration.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', example: 'Updated Plan' },
+        amount: { type: 'number', format: 'float', example: 39.99 },
+        billingModel: {
+          type: 'string',
+          enum: ['recurring', 'one_time', 'custom_input'],
+          example: 'recurring',
+        },
+        interval: {
+          type: 'string',
+          enum: ['weekly', 'monthly', 'yearly'],
+          example: 'monthly',
+        },
+        trialDays: { type: 'integer', example: 7 },
+        trialRequireCard: { type: 'boolean', example: true },
+        gracePeriodDays: { type: 'integer', example: 5 },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Plan successfully updated',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', example: 'plan_7a8dca9' },
+        merchantId: { type: 'string', example: 'merchant-test-123' },
+        name: { type: 'string', example: 'Updated Plan' },
+        amount: { type: 'number', format: 'float', example: 39.99 },
+        billingModel: { type: 'string', example: 'recurring' },
+        interval: { type: 'string', example: 'monthly' },
+        trialDays: { type: 'integer', example: 7 },
+        trialRequireCard: { type: 'boolean', example: true },
+        gracePeriodDays: { type: 'integer', example: 5 },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized JWT session token' })
+  @ApiResponse({ status: 404, description: 'Plan not found' })
+  async updatePlan(
+    @Param('id') id: string,
+    @Body() body: CreatePlanDto,
+    @Request() req: ExpressRequest,
+  ) {
+    const merchantId = (req.user as Record<string, unknown>)
+      .merchantId as string;
+    return this.billingService.updatePlan(merchantId, id, body);
+  }
+
+  @Get('dashboard/stats')
+  @ApiOperation({
+    summary: 'Get dashboard statistics for authenticated merchant',
+    description:
+      'Returns key metrics including MRR, active subscriptions, churn rate, and recent volume.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Statistics retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        mrr: { type: 'number', format: 'float', example: 2995.77 },
+        activeSubscriptions: { type: 'integer', example: 312 },
+        churnRate: { type: 'number', format: 'float', example: 0.0124 },
+        recentVolume: { type: 'number', format: 'float', example: 45000.0 },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized JWT session token' })
+  async getDashboardStats(@Request() req: ExpressRequest) {
+    const merchantId = (req.user as Record<string, unknown>)
+      .merchantId as string;
+    return this.billingService.getDashboardStats(merchantId);
   }
 }

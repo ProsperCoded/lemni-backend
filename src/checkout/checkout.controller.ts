@@ -396,4 +396,47 @@ export class CheckoutController {
   ) {
     return this.checkoutService.updatePaymentMethod(id, body.email);
   }
+
+  @Get('checkout/plans/:planId')
+  @ApiOperation({
+    summary: 'Get plan details for public checkout',
+    description:
+      'Returns plan name, amount, and billing details for display on the public checkout page.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Plan details retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', example: 'Standard Plan' },
+        amount: { type: 'number', format: 'float', example: 29.99 },
+        billingModel: {
+          type: 'string',
+          enum: ['recurring', 'one_time', 'custom_input'],
+          example: 'recurring',
+        },
+        interval: {
+          type: 'string',
+          enum: ['weekly', 'monthly', 'yearly'],
+          nullable: true,
+          example: 'monthly',
+        },
+        trialDays: { type: 'integer', example: 0 },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Plan not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'Plan not found' },
+      },
+    },
+  })
+  async getPlanDetails(@Param('planId') planId: string) {
+    return this.checkoutService.getPlanDetails(planId);
+  }
 }

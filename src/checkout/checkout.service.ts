@@ -476,4 +476,26 @@ export class CheckoutService {
       throw error;
     }
   }
+
+  /**
+   * Get plan details for public display on checkout page.
+   */
+  async getPlanDetails(planId: string) {
+    const [plan] = await this.db
+      .select({
+        name: plans.name,
+        amount: plans.amount,
+        billingModel: plans.billingModel,
+        interval: plans.interval,
+        trialDays: plans.trialDays,
+      })
+      .from(plans)
+      .where(eq(plans.id, planId));
+
+    if (!plan) {
+      throw new NotFoundException('Plan not found');
+    }
+
+    return plan;
+  }
 }

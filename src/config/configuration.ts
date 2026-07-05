@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const EnvironmentSchema = z.object({
   PORT: z.coerce.number().default(3000),
+  FRONTEND_URL: z.string().url().optional(),
   TURSO_DATABASE_URL: z.string().url().or(z.string().startsWith('file:')),
   TURSO_AUTH_TOKEN: z.string().optional(),
   NOMBA_MODE: z.enum(['sandbox', 'live']).default('sandbox'),

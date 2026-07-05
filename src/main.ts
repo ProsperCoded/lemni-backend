@@ -5,6 +5,11 @@ import { AppModule } from './app.module';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
 
+  app.enableCors({
+    origin: process.env.FRONTEND_URL ?? 'http://localhost:3001',
+    credentials: false,
+  });
+
   const config = new DocumentBuilder()
     .setTitle('LEMNI PaaS Core Engine API')
     .setDescription(
