@@ -276,4 +276,124 @@ export class CheckoutController {
     return this.checkoutService.getCheckoutSessionStatus(id);
   }
 
+  @Post('checkout/plans/:planId/sessions')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Create a public plan checkout session',
+    description: 'Enables checking out plans directly from a public URL link without credentials.',
+  })
+  async createPublicPlanSession(
+    @Param('planId') planId: string,
+    @Body() body: { email: string; callbackUrl?: string },
+  ) {
+    return this.checkoutService.createPublicPlanSession(planId, body);
+  }
+
+  @Post('public/subscriptions/:id/unsubscribe/request')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Request to self-unsubscribe from a subscription (public)',
+    description: 'Generates and sends a 6-digit OTP code to the subscription owner email to verify unsubscribe request.',
+  })
+  async requestUnsubscribe(
+    @Param('id') id: string,
+    @Body() body: { email: string },
+  ) {
+    return this.checkoutService.requestUnsubscribe(id, body.email);
+  }
+
+  @Post('public/subscriptions/:id/unsubscribe/confirm')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Confirm self-unsubscribe with OTP (public)',
+    description: 'Confirms subscription cancellation using the 6-digit verification code.',
+  })
+  async confirmUnsubscribe(
+    @Param('id') id: string,
+    @Body() body: { code: string },
+  ) {
+    return this.checkoutService.confirmUnsubscribe(id, body.code);
+  }
+
+  @Post('public/subscriptions/:id/update-payment-method')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Update payment method for a subscription (public)',
+    description:
+      'Generates a tokenization-only checkout URL for the customer to update their card details without triggering a charge.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'The subscription ID',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['email'],
+      properties: {
+        email: {
+          type: 'string',
+          format: 'email',
+          example: 'customer@example.com',
+          description: 'Email address associated with the subscription (for verification)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Card update checkout session created',
+    schema: {
+      type: 'object',
+      properties: {
+        sessionId: {
+          type: 'string',
+          example: 'card_upd_abc123def456',
+          description: 'Unique session ID for the card update checkout',
+        },
+        checkoutUrl: {
+          type: 'string',
+          format: 'uri',
+          example: 'https://checkout.nomba.com/pay/card_upd_link',
+          description: 'URL to redirect customer to for card details entry',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request (canceled subscription or email mismatch)',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Subscription or customer not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 502,
+    description: 'Payment gateway checkout generation failed',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string' },
+      },
+    },
+  })
+  async updatePaymentMethod(
+    @Param('id') id: string,
+    @Body() body: { email: string },
+  ) {
+    return this.checkoutService.updatePaymentMethod(id, body.email);
+  }
 }

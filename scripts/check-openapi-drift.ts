@@ -5,6 +5,26 @@ import * as yaml from 'js-yaml';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Post-processing function to remove auth from public endpoints
+function removeAuthFromPublicEndpoints(document: any): any {
+  const publicEndpoints = [
+    '/admin/billing/subscriptions/{id}/unsubscribe/request',
+    '/admin/billing/subscriptions/{id}/unsubscribe/confirm',
+  ];
+
+  for (const endpointPath of publicEndpoints) {
+    if (document.paths[endpointPath]) {
+      for (const method of Object.keys(document.paths[endpointPath])) {
+        const operation = document.paths[endpointPath][method];
+        // Set security to empty array to indicate no auth required
+        operation.security = [];
+      }
+    }
+  }
+
+  return document;
+}
+
 async function bootstrap() {
   // Bootstrap the application in headless mode (without starting HTTP server listener)
   const app = await NestFactory.createApplicationContext(AppModule, { logger: false });
@@ -19,9 +39,12 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
     
-  const document = SwaggerModule.createDocument(expressApp, config);
+  let document = SwaggerModule.createDocument(expressApp, config);
   await expressApp.close();
   await app.close();
+
+  // Post-process: Remove bearer auth from public endpoints
+  document = removeAuthFromPublicEndpoints(document);
 
   // Convert schema object to a sorted, deterministic YAML string
   const cleanDocument = JSON.parse(JSON.stringify(document));

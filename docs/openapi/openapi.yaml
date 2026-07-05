@@ -607,8 +607,7 @@ paths:
                     type: string
                 type: object
           description: Subscription not found
-      security:
-        - bearer: []
+      security: []
       summary: Confirm unsubscribe with OTP (public)
       tags:
         - merchant-dashboard/billing
@@ -673,8 +672,7 @@ paths:
                     type: string
                 type: object
           description: Subscription not found
-      security:
-        - bearer: []
+      security: []
       summary: Request email OTP to unsubscribe (public)
       tags:
         - merchant-dashboard/billing
@@ -1024,6 +1022,218 @@ paths:
       summary: Create a subscription checkout session
       tags:
         - developer-apis/checkout
+  /api/v1/public/subscriptions/{id}/update-payment-method:
+    post:
+      description: >-
+        Generates a tokenization-only checkout URL that allows a customer to update their payment method (card)
+        without triggering a charge. Use this when a customer's payment fails and they need to add a new card.
+      operationId: CheckoutController_updatePaymentMethod
+      parameters:
+        - description: The subscription ID
+          in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                email:
+                  description: Email address associated with the subscription (for verification)
+                  example: customer@example.com
+                  format: email
+                  type: string
+              required:
+                - email
+              type: object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  sessionId:
+                    description: Unique session ID for the card update checkout
+                    example: card_upd_abc123def456
+                    type: string
+                  checkoutUrl:
+                    description: URL to redirect customer to for card details entry
+                    example: https://checkout.nomba.com/pay/card_upd_link
+                    format: uri
+                    type: string
+                type: object
+          description: Card update checkout session created
+        '400':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Cannot update payment method for a canceled subscription
+                    type: string
+                type: object
+          description: Bad request (canceled subscription or email mismatch)
+        '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Subscription not found
+                    type: string
+                type: object
+          description: Subscription or customer not found
+        '502':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Payment gateway checkout generation failed
+                    type: string
+                type: object
+          description: Payment gateway checkout generation failed
+      security: []
+      summary: Update payment method for a subscription (public)
+      tags:
+        - public-api/subscription-management
+  /api/v1/public/subscriptions/{id}/unsubscribe/confirm:
+    post:
+      description: Confirms subscription cancellation using the 6-digit verification code sent via email.
+      operationId: CheckoutController_confirmUnsubscribe
+      parameters:
+        - description: The subscription ID
+          in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                code:
+                  description: The 6-digit OTP code
+                  example: '123456'
+                  type: string
+              required:
+                - code
+              type: object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    description: Confirmation message
+                    example: Subscription successfully canceled.
+                    type: string
+                  success:
+                    description: Operation success status
+                    example: true
+                    type: boolean
+                type: object
+          description: Subscription successfully canceled
+        '400':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Invalid or expired verification code
+                    type: string
+                type: object
+          description: Invalid or expired verification code
+        '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Subscription not found
+                    type: string
+                type: object
+          description: Subscription not found
+      security: []
+      summary: Confirm self-unsubscribe with OTP (public)
+      tags:
+        - public-api/subscription-management
+  /api/v1/public/subscriptions/{id}/unsubscribe/request:
+    post:
+      description: >-
+        Generates and sends a 6-digit OTP code to the subscription owner email to verify unsubscribe request.
+        Customer-initiated flow.
+      operationId: CheckoutController_requestUnsubscribe
+      parameters:
+        - description: The subscription ID
+          in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                email:
+                  description: Email address associated with the subscription
+                  example: subscriber@test.com
+                  format: email
+                  type: string
+              required:
+                - email
+              type: object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    description: Confirmation message
+                    example: Verification code sent to subscriber@test.com
+                    type: string
+                type: object
+          description: Verification code sent successfully
+        '403':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Email does not match subscription owner
+                    type: string
+                type: object
+          description: Email does not match subscription owner
+        '404':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    description: Error message
+                    example: Subscription not found
+                    type: string
+                type: object
+          description: Subscription not found
+      security: []
+      summary: Request email OTP to unsubscribe (public)
+      tags:
+        - public-api/subscription-management
   /api/v1/webhooks/test:
     post:
       description: Returns 200 OK. Use this to test if webhooks are reaching your server.

@@ -21,6 +21,8 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiParam,
+  ApiSecurity,
+  ApiOkResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BillingService } from './billing.service';
@@ -41,7 +43,7 @@ import type { PublicPlanSessionDto, UnsubscribeRequestDto, UnsubscribeConfirmDto
 @ApiTags('merchant-dashboard/billing')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller('admin/billing')
+@Controller('admin')
 export class BillingController {
   constructor(private readonly billingService: BillingService) {}
 
@@ -540,6 +542,7 @@ export class BillingController {
   }
 
   @Post('subscriptions/:id/unsubscribe/confirm')
+  @Public()
   @HttpCode(HttpStatus.OK)
   @UsePipes(new ZodValidationPipe(UnsubscribeConfirmSchema))
   @ApiParam({

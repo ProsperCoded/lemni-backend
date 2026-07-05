@@ -373,4 +373,117 @@ describe('Checkout Module (e2e)', () => {
         .expect(400);
     });
   });
+
+  describe('Card Update Flow', () => {
+    const cardUpdateSubId = 'sub-card-update-test';
+    const customerEmail = 'card-update@customer.com';
+
+    beforeEach(async () => {
+      // Create customer
+      const [cust] = await db
+        .insert(customers)
+        .values({
+          id: `cust-card-update-${Date.now()}`,
+          merchantId: testMerchant.id,
+          email: customerEmail,
+          nombaToken: 'old_token_123',
+        })
+        .returning();
+
+      // Create plan
+      const [plan] = await db
+        .insert(plans)
+        .values({
+          id: 'plan-card-update-test',
+          merchantId: testMerchant.id,
+          name: 'Card Update Test Plan',
+          amount: 50,
+          billingModel: 'recurring',
+          interval: 'monthly',
+          gracePeriodDays: 3,
+        })
+        .returning();
+
+      await db.insert(subscriptions).values({
+        id: cardUpdateSubId,
+        customerId: cust.id,
+        planId: plan.id,
+        status: 'past_due',
+      });
+    });
+
+    afterEach(async () => {
+      await db.delete(subscriptions).where(eq(subscriptions.id, cardUpdateSubId));
+      await db.delete(plans).where(eq(plans.id, 'plan-card-update-test'));
+      await db.delete(customers).where(eq(customers.email, customerEmail));
+    });
+
+    it('should reject card update for canceled subscription (400)', async () => {
+      // Update subscription to canceled
+      await db
+        .update(subscriptions)
+        .set({ status: 'canceled' })
+        .where(eq(subscriptions.id, cardUpdateSubId));
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/public/subscriptions/${cardUpdateSubId}/update-payment-method`)
+        .send({ email: customerEmail })
+        .expect(400);
+    });
+
+    it('should reject card update for wrong email (400)', async () => {
+      await request(app.getHttpServer())
+        .post(`/api/v1/public/subscriptions/${cardUpdateSubId}/update-payment-method`)
+        .send({ email: 'wrong-email@test.com' })
+        .expect(400);
+    });
+
+    it('should return 404 for non-existent subscription', async () => {
+      await request(app.getHttpServer())
+        .post(`/api/v1/public/subscriptions/nonexistent-sub/update-payment-method`)
+        .send({ email: customerEmail })
+        .expect(404);
+    });
+
+    it('should successfully generate card update checkout session (200)', async () => {
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/public/subscriptions/${cardUpdateSubId}/update-payment-method`)
+        .send({ email: customerEmail })
+        .expect(200);
+
+      expect(response.body.sessionId).toBeDefined();
+      expect(response.body.checkoutUrl).toBe('https://checkout.nomba.com/pay/mock_link_123');
+      expect(response.body.sessionId).toMatch(/^card_upd_/);
+    });
+
+    it('should call Nomba with tokenizeCard: true but no amount', async () => {
+      // Create a spy to capture the payload
+      const nombaPayload = {
+        data: {
+          checkoutLink: 'https://checkout.nomba.com/pay/token_only_link',
+          orderReference: 'token_order_ref_456',
+        },
+      };
+      jest.spyOn(nombaClient, 'createCheckoutOrder').mockResolvedValueOnce(nombaPayload);
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/public/subscriptions/${cardUpdateSubId}/update-payment-method`)
+        .send({ email: customerEmail })
+        .expect(200);
+
+      // Verify the call was made
+      expect(nombaClient.createCheckoutOrder).toHaveBeenCalled();
+      const callArgs = (nombaClient.createCheckoutOrder as jest.Mock).mock.calls[
+        (nombaClient.createCheckoutOrder as jest.Mock).mock.calls.length - 1
+      ];
+      const payload = callArgs[1];
+
+      expect(payload.order).toBeDefined();
+      expect(payload.tokenizeCard).toBe(true);
+      // Should NOT have an amount field
+      expect(payload.order.amount).toBeUndefined();
+      expect(payload.order.customerEmail).toBe(customerEmail);
+      expect(payload.order.allowedPaymentMethods).toEqual(['Card']);
+    });
+  });
 });

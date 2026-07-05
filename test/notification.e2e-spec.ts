@@ -79,103 +79,72 @@ describe('Notification Module (e2e)', () => {
   });
 
   describe('POST /api/v1/webhooks/telegram (Bot Webhook)', () => {
-    it('should reject request with missing required fields (400)', async () => {
-      const response = await request(app.getHttpServer())
+    it('should reject webhook request without secret token (401)', async () => {
+      await request(app.getHttpServer())
         .post('/api/v1/webhooks/telegram')
         .send({
-          merchantId: testMerchant.id,
-          // missing chatId, signature, timestamp
-        })
-        .expect(400);
-
-      expect(response.body.message).toBeDefined();
-    });
-
-    it('should reject request with invalid/stale timestamp (400)', async () => {
-      const staleTimestamp = String(Date.now() - 10 * 60 * 1000); // 10 minutes old
-      const chatId = '123456789';
-      const signingString = `${testMerchant.id}:${chatId}:${staleTimestamp}`;
-      const signature = crypto
-        .createHmac('sha256', botSecret)
-        .update(signingString)
-        .digest('hex');
-
-      const response = await request(app.getHttpServer())
-        .post('/api/v1/webhooks/telegram')
-        .send({
-          merchantId: testMerchant.id,
-          chatId,
-          signature,
-          timestamp: staleTimestamp,
-        })
-        .expect(400);
-
-      expect(response.body.message).toContain('timestamp');
-    });
-
-    it('should reject request with invalid signature (401)', async () => {
-      const timestamp = String(Date.now());
-      const chatId = '123456789';
-
-      const response = await request(app.getHttpServer())
-        .post('/api/v1/webhooks/telegram')
-        .send({
-          merchantId: testMerchant.id,
-          chatId,
-          signature: 'invalid_signature_not_matching',
-          timestamp,
+          update_id: 10001,
+          message: {
+            message_id: 1,
+            chat: { id: 123456789, type: 'private' },
+            text: `/start ${testMerchant.username}`,
+          },
         })
         .expect(401);
-
-      expect(response.body.message).toContain('signature');
     });
 
-    it('should reject request for non-existent merchant (400)', async () => {
-      const timestamp = String(Date.now());
-      const chatId = '123456789';
-      const signingString = `merchant-nonexistent:${chatId}:${timestamp}`;
-      const signature = crypto
-        .createHmac('sha256', botSecret)
-        .update(signingString)
-        .digest('hex');
-
-      const response = await request(app.getHttpServer())
+    it('should reject webhook request with invalid secret token (401)', async () => {
+      await request(app.getHttpServer())
         .post('/api/v1/webhooks/telegram')
+        .set('x-telegram-bot-api-secret-token', 'invalid_secret_here')
         .send({
-          merchantId: 'merchant-nonexistent',
-          chatId,
-          signature,
-          timestamp,
+          update_id: 10001,
+          message: {
+            message_id: 1,
+            chat: { id: 123456789, type: 'private' },
+            text: `/start ${testMerchant.username}`,
+          },
         })
-        .expect(400);
-
-      expect(response.body.message).toContain('Merchant not found');
+        .expect(401);
     });
 
-    it('should successfully connect Telegram with valid signature (200)', async () => {
-      const timestamp = String(Date.now());
-      const chatId = '987654321';
-      const signingString = `${testMerchant.id}:${chatId}:${timestamp}`;
-      const signature = crypto
-        .createHmac('sha256', botSecret)
-        .update(signingString)
-        .digest('hex');
-
+    it('should handle /start command with invalid username gracefully (200)', async () => {
       const response = await request(app.getHttpServer())
         .post('/api/v1/webhooks/telegram')
+        .set('x-telegram-bot-api-secret-token', botSecret)
         .send({
-          merchantId: testMerchant.id,
-          chatId,
-          signature,
-          timestamp,
+          update_id: 10001,
+          message: {
+            message_id: 1,
+            from: { id: 123456789, is_bot: false, first_name: 'Test' },
+            chat: { id: 123456789, type: 'private' },
+            date: Math.floor(Date.now() / 1000),
+            text: '/start nonexistent-merchant-user',
+          },
         })
         .expect(200);
 
-      // Verify response
-      expect(response.body).toEqual({
-        success: true,
-        message: 'Telegram chat connected successfully',
-      });
+      expect(response.body).toEqual({ received: true });
+    });
+
+    it('should successfully connect Telegram with valid start command (200)', async () => {
+      const chatId = '987654321';
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/webhooks/telegram')
+        .set('x-telegram-bot-api-secret-token', botSecret)
+        .send({
+          update_id: 10001,
+          message: {
+            message_id: 1,
+            from: { id: parseInt(chatId), is_bot: false, first_name: 'Test' },
+            chat: { id: parseInt(chatId), type: 'private' },
+            date: Math.floor(Date.now() / 1000),
+            text: `/start ${testMerchant.username}`,
+          },
+        })
+        .expect(200);
+
+      expect(response.body).toEqual({ received: true });
 
       // Verify database was updated
       const [merchant] = await db
@@ -187,25 +156,23 @@ describe('Notification Module (e2e)', () => {
     });
 
     it('should update existing Telegram connection with new chat_id (200)', async () => {
-      const timestamp = String(Date.now());
       const newChatId = '111222333';
-      const signingString = `${testMerchant.id}:${newChatId}:${timestamp}`;
-      const signature = crypto
-        .createHmac('sha256', botSecret)
-        .update(signingString)
-        .digest('hex');
-
       const response = await request(app.getHttpServer())
         .post('/api/v1/webhooks/telegram')
+        .set('x-telegram-bot-api-secret-token', botSecret)
         .send({
-          merchantId: testMerchant.id,
-          chatId: newChatId,
-          signature,
-          timestamp,
+          update_id: 10002,
+          message: {
+            message_id: 2,
+            from: { id: parseInt(newChatId), is_bot: false, first_name: 'Test' },
+            chat: { id: parseInt(newChatId), type: 'private' },
+            date: Math.floor(Date.now() / 1000),
+            text: `/start ${testMerchant.username}`,
+          },
         })
         .expect(200);
 
-      expect(response.body.success).toBe(true);
+      expect(response.body).toEqual({ received: true });
 
       // Verify database was updated to new chat_id
       const [merchant] = await db
@@ -268,21 +235,19 @@ describe('Notification Module (e2e)', () => {
 
     it('should return connected status with masked chat_id (200)', async () => {
       // First reconnect telegram
-      const timestamp = String(Date.now());
       const chatId = '9876543210';
-      const signingString = `${testMerchant.id}:${chatId}:${timestamp}`;
-      const signature = crypto
-        .createHmac('sha256', botSecret)
-        .update(signingString)
-        .digest('hex');
-
       await request(app.getHttpServer())
         .post('/api/v1/webhooks/telegram')
+        .set('x-telegram-bot-api-secret-token', botSecret)
         .send({
-          merchantId: testMerchant.id,
-          chatId,
-          signature,
-          timestamp,
+          update_id: 10003,
+          message: {
+            message_id: 3,
+            from: { id: parseInt(chatId), is_bot: false, first_name: 'Test' },
+            chat: { id: parseInt(chatId), type: 'private' },
+            date: Math.floor(Date.now() / 1000),
+            text: `/start ${testMerchant.username}`,
+          },
         })
         .expect(200);
 
@@ -302,25 +267,21 @@ describe('Notification Module (e2e)', () => {
   describe('Telegram Connection Flow (Complete User Journey)', () => {
     it('should handle complete connect → check status → disconnect → check status flow', async () => {
       // Step 1: Connect Telegram
-      const connectTimestamp = String(Date.now());
       const chatId = '5555666677';
-      const connectSigningString = `${testMerchant.id}:${chatId}:${connectTimestamp}`;
-      const connectSignature = crypto
-        .createHmac('sha256', botSecret)
-        .update(connectSigningString)
-        .digest('hex');
-
-      const connectResponse = await request(app.getHttpServer())
+      await request(app.getHttpServer())
         .post('/api/v1/webhooks/telegram')
+        .set('x-telegram-bot-api-secret-token', botSecret)
         .send({
-          merchantId: testMerchant.id,
-          chatId,
-          signature: connectSignature,
-          timestamp: connectTimestamp,
+          update_id: 10004,
+          message: {
+            message_id: 4,
+            from: { id: parseInt(chatId), is_bot: false, first_name: 'Test' },
+            chat: { id: parseInt(chatId), type: 'private' },
+            date: Math.floor(Date.now() / 1000),
+            text: `/start ${testMerchant.username}`,
+          },
         })
         .expect(200);
-
-      expect(connectResponse.body.success).toBe(true);
 
       // Step 2: Check status (should be connected)
       const statusResponse1 = await request(app.getHttpServer())

@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DRIZZLE_PROVIDER } from '../database/database.provider';
@@ -23,6 +24,8 @@ import { EmailService } from '../common/services/email.service';
 
 @Injectable()
 export class CheckoutService {
+  private readonly logger = new Logger(CheckoutService.name);
+
   constructor(
     @Inject(DRIZZLE_PROVIDER) private readonly db: DrizzleDB,
     private readonly nombaClient: NombaClient,
@@ -331,13 +334,8 @@ export class CheckoutService {
       expiresAt,
     });
 
-    // Send email
-    const emailHtml = this.emailService.renderOtpEmail(code);
-    await this.emailService.sendEmail(
-      email,
-      'Lemni - Confirm your unsubscribe request',
-      emailHtml,
-    );
+    // Send email via modular template
+    await this.emailService.sendConfirmUnsubscribeOtp(email, code);
 
     return {
       success: true,
@@ -393,5 +391,89 @@ export class CheckoutService {
       success: true,
       message: 'Subscription successfully canceled.',
     };
+  }
+
+  /**
+   * Generates a tokenization-only checkout for customer to update payment method.
+   * No charge is made; only card token is captured.
+   */
+  async updatePaymentMethod(subscriptionId: string, email: string) {
+    const [sub] = await this.db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.id, subscriptionId));
+
+    if (!sub) {
+      throw new NotFoundException('Subscription not found');
+    }
+
+    if (sub.status === 'canceled') {
+      throw new BadRequestException(
+        'Cannot update payment method for a canceled subscription',
+      );
+    }
+
+    const customer = await this.db.query.customers.findFirst({
+      where: eq(customers.id, sub.customerId),
+    });
+
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    if (customer.email !== email) {
+      throw new BadRequestException('Email does not match subscription owner');
+    }
+
+    const plan = await this.db.query.plans.findFirst({
+      where: eq(plans.id, sub.planId),
+    });
+
+    if (!plan) {
+      throw new NotFoundException('Associated plan not found');
+    }
+
+    const sessionId = `card_upd_${crypto.randomBytes(12).toString('hex')}`;
+    const subAccountId = this.configService.get<string>(
+      'NOMBA_SUB_ACCOUNT_ID',
+    );
+
+    const orderPayload = {
+      order: {
+        description: `Card Update - ${plan.name} - ${subscriptionId}`,
+        country: 'NG',
+        currency: 'NGN',
+        customerEmail: customer.email,
+        allowedPaymentMethods: ['Card'],
+        subAccountId,
+      },
+      tokenizeCard: true,
+    };
+
+    this.logger.log(
+      `[CardUpdate] Generating tokenization checkout for subscription ${subscriptionId}`,
+    );
+
+    try {
+      const response = (await this.nombaClient.createCheckoutOrder(
+        sessionId,
+        orderPayload,
+      )) as Record<string, unknown>;
+      const responseData = response.data as Record<string, unknown>;
+
+      this.logger.log(
+        `[CardUpdate] Checkout generated successfully. Session: ${sessionId}`,
+      );
+
+      return {
+        sessionId,
+        checkoutUrl: responseData.checkoutLink as string,
+      };
+    } catch (error) {
+      this.logger.error(
+        `[CardUpdate] Failed to generate checkout for subscription ${subscriptionId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw error;
+    }
   }
 }

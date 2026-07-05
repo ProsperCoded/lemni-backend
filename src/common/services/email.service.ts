@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import {
+  renderResetPasswordOtpEmail,
+  renderConfirmUnsubscribeOtpEmail,
+  renderPaymentFailedAlertEmail,
+  renderSubscriptionCanceledAlertEmail,
+} from './email-templates';
 
 @Injectable()
 export class EmailService {
@@ -14,6 +20,9 @@ export class EmailService {
       'noreply@mail.uninav.tech';
   }
 
+  /**
+   * Core send method wrapping Resend API fetch.
+   */
   async sendEmail(to: string, subject: string, html: string): Promise<boolean> {
     if (!this.apiKey) {
       this.logger.warn(
@@ -60,92 +69,58 @@ export class EmailService {
     }
   }
 
+  /**
+   * Renders the confirm unsubscribe OTP code email.
+   * Retained for simple backward compatibility.
+   */
   renderOtpEmail(otpCode: string): string {
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Confirm Your Unsubscribe Request</title>
-        <style>
-          body {
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            background-color: #f4f6f8;
-            margin: 0;
-            padding: 0;
-          }
-          .container {
-            max-width: 600px;
-            margin: 40px auto;
-            background: #ffffff;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-          }
-          .header {
-            background-color: #1a1a1a;
-            padding: 30px;
-            text-align: center;
-          }
-          .header h1 {
-            color: #ffffff;
-            margin: 0;
-            font-size: 28px;
-            letter-spacing: 1px;
-          }
-          .content {
-            padding: 40px 30px;
-            color: #333333;
-            line-height: 1.6;
-          }
-          .content p {
-            margin: 0 0 20px;
-            font-size: 16px;
-          }
-          .otp-card {
-            background-color: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 6px;
-            padding: 20px;
-            text-align: center;
-            margin: 30px 0;
-          }
-          .otp-code {
-            font-size: 36px;
-            font-weight: bold;
-            color: #111111;
-            letter-spacing: 4px;
-            margin: 0;
-          }
-          .footer {
-            background-color: #f8f9fa;
-            padding: 20px;
-            text-align: center;
-            font-size: 12px;
-            color: #666666;
-            border-top: 1px solid #e9ecef;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>Lemni</h1>
-          </div>
-          <div class="content">
-            <p>Hello,</p>
-            <p>We received a request to unsubscribe your email from your Lemni subscription. To complete this request, please use the following one-time verification code (OTP):</p>
-            <div class="otp-card">
-              <h2 class="otp-code">${otpCode}</h2>
-            </div>
-            <p>This code is valid for 10 minutes. If you did not request this, please ignore this email and your subscription will remain active.</p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} Lemni. All rights reserved.</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
+    return renderConfirmUnsubscribeOtpEmail(otpCode);
+  }
+
+  /**
+   * Helper to send forgot password reset OTP.
+   */
+  async sendForgotPasswordOtp(to: string, code: string): Promise<boolean> {
+    const html = renderResetPasswordOtpEmail(code);
+    return this.sendEmail(to, 'Lemni - Reset Your Password', html);
+  }
+
+  /**
+   * Helper to send confirm unsubscribe OTP.
+   */
+  async sendConfirmUnsubscribeOtp(to: string, code: string): Promise<boolean> {
+    const html = renderConfirmUnsubscribeOtpEmail(code);
+    return this.sendEmail(to, 'Lemni - Confirm your unsubscribe request', html);
+  }
+
+  /**
+   * Helper to send payment failed alerts.
+   */
+  async sendPaymentFailedAlert(
+    to: string,
+    planName: string,
+    amount: number,
+    gracePeriodDays: number,
+    subscriptionId?: string,
+  ): Promise<boolean> {
+    const html = renderPaymentFailedAlertEmail(
+      to,
+      planName,
+      amount,
+      gracePeriodDays,
+      subscriptionId,
+    );
+    return this.sendEmail(to, 'Lemni - Payment Failed Alert', html);
+  }
+
+  /**
+   * Helper to send subscription cancellation alerts.
+   */
+  async sendSubscriptionCanceledAlert(
+    to: string,
+    planName: string,
+  ): Promise<boolean> {
+    const html = renderSubscriptionCanceledAlertEmail(to, planName);
+    return this.sendEmail(to, 'Lemni - Subscription Canceled', html);
   }
 }

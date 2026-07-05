@@ -402,45 +402,8 @@ export class AuthService {
       expiresAt,
     });
 
-    // Send email
-    const emailHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Reset Your Password</title>
-        <style>
-          body { font-family: Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 0; }
-          .container { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-          .header { background-color: #1a1a1a; padding: 30px; text-align: center; color: white; }
-          .content { padding: 40px 30px; color: #333333; line-height: 1.6; }
-          .otp-card { background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 20px; text-align: center; margin: 30px 0; }
-          .otp-code { font-size: 36px; font-weight: bold; color: #111111; letter-spacing: 4px; margin: 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h2>Lemni Security</h2>
-          </div>
-          <div class="content">
-            <p>Hello,</p>
-            <p>We received a request to reset your password. Use the following one-time verification code (OTP) to proceed:</p>
-            <div class="otp-card">
-              <h2 class="otp-code">${code}</h2>
-            </div>
-            <p>This code is valid for 10 minutes. If you did not request this, please ignore this email.</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-
-    await this.emailService.sendEmail(
-      email,
-      'Lemni - Reset Your Password',
-      emailHtml,
-    );
+    // Send email via modular template
+    await this.emailService.sendForgotPasswordOtp(email, code);
 
     return genericResponse;
   }

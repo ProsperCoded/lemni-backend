@@ -37,7 +37,7 @@ describe('Telegram Webhook Flow (e2e)', () => {
       expect(signupRes.status).toBe(201);
       expect(signupRes.body).toHaveProperty('id');
       expect(signupRes.body).toHaveProperty('username');
-      expect(signupRes.body.username).toMatch(/^telegram-test-merchant/);
+      expect(signupRes.body.username).toMatch(/^telegram-test-mercha/);
 
       merchantId = signupRes.body.id;
       merchantUsername = signupRes.body.username;
